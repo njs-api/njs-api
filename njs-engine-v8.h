@@ -1124,7 +1124,7 @@ class Context {
 
     return Value(
       internal::V8LocalFromMaybe(
-        ctor.GetV8Value<v8::Function>()->NewInstance(_context, 0, NULL)));
+        ctor.GetV8Value<v8::Function>()->NewInstance(_context)));
   }
 
   template<typename ...Args>
@@ -1133,7 +1133,10 @@ class Context {
 
     return Value(
       internal::V8LocalFromMaybe(
-        ctor.GetV8Value<v8::Function>()->NewInstance(_context, sizeof(argv) / sizeof(argv[0]), argv)));
+        ctor.GetV8Value<v8::Function>()->NewInstance(
+          _context,
+          static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+          reinterpret_cast<v8::Local<v8::Value>*>(argv))));
   }
 
   NJS_INLINE Value NewArgv(const Value& ctor, size_t argc, const Value* argv) NJS_NOEXCEPT {
@@ -1144,7 +1147,7 @@ class Context {
       internal::V8LocalFromMaybe(
         ctor.GetV8Value<v8::Function>()->NewInstance(
           _context,
-          static_cast<int>(sizeof(argv) / sizeof(argv[0])),
+          static_cast<int>(argc),
           const_cast<v8::Local<v8::Value>*>(reinterpret_cast<const v8::Local<v8::Value>*>(argv)))));
   }
 
