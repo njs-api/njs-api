@@ -1,0 +1,31 @@
+{
+  "name": "njs",
+  "version": "0.0.1",
+  "license": "Unlicense",
+
+  "description": "Nautral JavaScript Interface",
+  "keywords": ["bindings", "c++", "native"],
+
+  "homepage": "https://github.com/blend2d/njs",
+  "bugs": {
+    "url": "https://github.com/blend2d/njs/issues"
+  },
+
+  "contributors": [
+    "Petr Kobalicek <kobalicek.petr@gmail.com> (kobalicek.com)"
+  ],
+
+  "main": "./index.js",
+
+  "dependencies": {},
+  "devDependencies": {},
+
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/blend2d/njs.git"
+  },
+
+  "scripts": {
+    "test": "node-gyp rebuild && node test.js"
+  }
+}
