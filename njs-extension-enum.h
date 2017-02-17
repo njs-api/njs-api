@@ -20,16 +20,16 @@ namespace njs {
 /*TODO:
   template<typename Enum_>
   NJS_INLINE Value NewStringFromEnum(int value, const Enum_& enum_) NJS_NOEXCEPT {
-    return internal::V8EnumToString(
+    return Internal::V8EnumToString(
       *this, value, reinterpret_cast<const Enum&>(enum_));
   }
 */
 
 // ============================================================================
-// [njs::internal::EnumUtils]
+// [njs::Internal::EnumUtils]
 // ============================================================================
 
-namespace internal {
+namespace Internal {
   namespace EnumUtils {
     static const unsigned int kEnumNotFound = ~static_cast<unsigned int>(0);
 
@@ -43,7 +43,7 @@ namespace internal {
     //
     // Keep it inlined, it should expand only once if used properly.
     template<typename CharType>
-    static NJS_INLINE unsigned int Parse(const CharType* in, size_t length, const char* enumData) NJS_NOEXCEPT {
+    static NJS_INLINE unsigned int parse(const CharType* in, size_t length, const char* enumData) NJS_NOEXCEPT {
       if (!length) return kEnumNotFound;
 
       const char* pa = enumData;
@@ -86,7 +86,7 @@ L_End:
 
     // Keep it inlined, it should expand only once if used properly.
     template<typename CharType>
-    static NJS_INLINE unsigned int Stringify(CharType* data, unsigned int index, const char* enumData) NJS_NOEXCEPT {
+    static NJS_INLINE unsigned int stringify(CharType* data, unsigned int index, const char* enumData) NJS_NOEXCEPT {
       unsigned int i = 0;
       const char* p = enumData;
 
@@ -111,7 +111,7 @@ L_End:
       return static_cast<size_t>((intptr_t)(pData - data));
     }
   } // EnumUtils namespace
-} // internal namespace
+} // Internal namespace
 
 // ============================================================================
 // [njs::Enum & NJS_ENUM]
@@ -121,39 +121,39 @@ struct Enum {
   enum { kConceptType = kConceptSerializer };
 
   // Returns enumeration representation defined by `EnumT<>`.
-  NJS_INLINE const char* GetData() const NJS_NOEXCEPT {
+  NJS_INLINE const char* getData() const NJS_NOEXCEPT {
     return reinterpret_cast<const char*>(this + 1);
   }
 
   template<typename T>
-  NJS_NOINLINE Result Serialize(Context& ctx, T in, Value& out) const NJS_NOEXCEPT {
+  NJS_NOINLINE Result serialize(Context& ctx, T in, Value& out) const NJS_NOEXCEPT {
     unsigned int index = static_cast<unsigned int>(static_cast<int>(in)) - static_cast<unsigned int>(_start);
     uint16_t content[kMaxEnumLength];
 
-    unsigned int length = internal::EnumUtils::Stringify<uint16_t>(content, index, GetData());
-    if (length == internal::EnumUtils::kEnumNotFound || length == 0) {
-      out = ctx.EmptyString();
+    unsigned int length = Internal::EnumUtils::stringify<uint16_t>(content, index, getData());
+    if (length == Internal::EnumUtils::kEnumNotFound || length == 0) {
+      out = ctx.newEmptyString();
       return kResultInvalidValue;
     }
     else {
-      out = ctx.NewString(Utf16Ref(content, length));
-      return ResultOf(out);
+      out = ctx.newString(Utf16Ref(content, length));
+      return resultOf(out);
     }
   }
 
   template<typename T>
-  NJS_NOINLINE Result Deserialize(Context& ctx, const Value& in, T& out) const NJS_NOEXCEPT {
-    if (!in.IsString())
-      return kResultInvalidValueType;
-
-    uint16_t content[kMaxEnumLength];
-    int length = in.StringLength();
-
-    if (length <= 0 || length > kMaxEnumLength || in.ReadUtf16(content, length) < length)
+  NJS_NOINLINE Result deserialize(Context& ctx, const Value& in, T& out) const NJS_NOEXCEPT {
+    if (!in.isString())
       return kResultInvalidValue;
 
-    unsigned int index = internal::EnumUtils::Parse<uint16_t>(content, length, GetData());
-    if (index == internal::EnumUtils::kEnumNotFound)
+    uint16_t content[kMaxEnumLength];
+    int length = in.getStringLength();
+
+    if (length <= 0 || length > kMaxEnumLength || in.readUtf16(content, length) < length)
+      return kResultInvalidValue;
+
+    unsigned int index = Internal::EnumUtils::parse<uint16_t>(content, length, getData());
+    if (index == Internal::EnumUtils::kEnumNotFound)
       return kResultInvalidValue;
 
     out = static_cast<T>(index + static_cast<unsigned int>(_start));
@@ -182,16 +182,16 @@ struct EnumT {
   NJS_INLINE const Enum* operator&() const NJS_NOEXCEPT { return &_base; }
 
   // Compatibility with `Enum`.
-  NJS_INLINE const char* GetData() const NJS_NOEXCEPT { return _base.GetData(); }
+  NJS_INLINE const char* getData() const NJS_NOEXCEPT { return _base.getData(); }
 
   template<typename T>
-  NJS_NOINLINE Result Serialize(Context& ctx, T in, Value& out) const NJS_NOEXCEPT {
-    return _base.Serialize(ctx, in, out);
+  NJS_NOINLINE Result serialize(Context& ctx, T in, Value& out) const NJS_NOEXCEPT {
+    return _base.serialize(ctx, in, out);
   }
 
   template<typename T>
-  NJS_INLINE Result Deserialize(Context& ctx, const Value& in, T& out) const NJS_NOEXCEPT {
-    return _base.Deserialize(ctx, in, out);
+  NJS_INLINE Result deserialize(Context& ctx, const Value& in, T& out) const NJS_NOEXCEPT {
+    return _base.deserialize(ctx, in, out);
   }
 
   Enum _base;

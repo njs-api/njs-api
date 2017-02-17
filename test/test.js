@@ -1,25 +1,29 @@
 "use strict";
 
-var addon = require("../build/Release/njs-test.node");
+const native = require("../build/Release/njs-test.node");
 
 // ============================================================================
 // [Boilerplate]
 // ============================================================================
 
-function test(description, fn) {
-  var complete = false;
+function log(text) {
+  console.log("  [JS~] " + text);
+}
 
+function test(description, fn) {
+  console.log(`${description}:`);
+
+  var complete = false;
   function done() {
     complete = true;
+    console.log("");
   }
 
   try {
-    console.log("");
-    console.log("[JS] TEST - " + description);
     fn(done);
   }
   catch (ex) {
-    console.log("[JS] FAILURE: " + ex.toString());
+    log(`FAILURE: ${description}: ${ex.toString()}`);
     throw ex;
   }
 
@@ -30,25 +34,25 @@ function test(description, fn) {
 
 function assertEqual(a, b) {
   if (a === b) return;
-  throw new TypeError("Expected " + String(a) + " === " + String(b));
+  throw new TypeError(`Expected ${String(a)} === ${String(b)}`);
 }
 
 function assertThrow(fn) {
   try {
     fn();
   } catch (ex) {
-    console.log("[JS] OK (Thrown): " + ex.toString());
+    log(`Thrown as expected: ${ex.toString()}`);
     return;
   }
-  throw new TypeError("[JS] FAILURE: " + "Expected an exception to be thrown");
+  throw new TypeError(`[JS] FAILURE: Expected an exception to be thrown`);
 }
 
 // ============================================================================
-// [Basic - Instantiate the addon.Class and use get/set, methods, and statics]
+// [Basic - Instantiate the native.Object and use get/set, methods, and statics]
 // ============================================================================
 
 test("Basic functionality", function(done) {
-  var Obj = addon.Object;
+  var Obj = native.Object;
   var inst = new Obj(1, 2);
 
   assertEqual(inst.a, 1);
@@ -99,7 +103,7 @@ test("Basic functionality", function(done) {
 // ============================================================================
 
 test("Basic security (incompatible signature)", function(done) {
-  var Obj = addon.Object;
+  var Obj = native.Object;
 
   var inst = new Obj(1, 2);
   var fake = {};
@@ -118,3 +122,5 @@ test("Basic security (incompatible signature)", function(done) {
 
   done();
 });
+
+console.log("All tests passed!");

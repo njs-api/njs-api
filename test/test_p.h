@@ -12,10 +12,10 @@
 #include <stdio.h>
 #include "../njs.h"
 
-namespace njstest {
+namespace test {
 
 // ============================================================================
-// [njstest::Object]
+// [test::Object]
 // ============================================================================
 
 // Some object to be wrapped.
@@ -23,11 +23,11 @@ struct Object {
   NJS_INLINE Object(int a, int b) NJS_NOEXCEPT
     : _a(a),
       _b(b) {
-    printf("njstest::Object::Object(%d, %d)\n", _a, _b);
+    printf("  [C++] test::Object::Object(%d, %d)\n", _a, _b);
   }
 
   NJS_INLINE ~Object() NJS_NOEXCEPT {
-    printf("njstest::Object::~Object()\n");
+    printf("  [C++] test::Object::~Object()\n");
   }
 
   // --------------------------------------------------------------------------
@@ -35,17 +35,17 @@ struct Object {
   // --------------------------------------------------------------------------
 
   NJS_INLINE int getA() const NJS_NOEXCEPT {
-    printf("njstest::Object::getA() -> %d\n", _a);
+    printf("  [C++] test::Object::getA() -> %d\n", _a);
     return _a;
   }
 
   NJS_INLINE int getB() const NJS_NOEXCEPT {
-    printf("njstest::Object::getB() -> %d\n", _b);
+    printf("  [C++] test::Object::getB() -> %d\n", _b);
     return _b;
   }
 
   NJS_INLINE void setA(int a) NJS_NOEXCEPT {
-    printf("njstest::Object::setA(%d)\n", a);
+    printf("  [C++] test::Object::setA(%d)\n", a);
     _a = a;
   }
 
@@ -54,7 +54,7 @@ struct Object {
   // --------------------------------------------------------------------------
 
   NJS_INLINE void add(int n) NJS_NOEXCEPT {
-    printf("njstest::Object::add(%d)\n", n);
+    printf("  [C++] test::Object::add(%d)\n", n);
     _a += n;
     _b += n;
   }
@@ -64,7 +64,7 @@ struct Object {
   // --------------------------------------------------------------------------
 
   static NJS_INLINE int staticMul(int a, int b) NJS_NOEXCEPT {
-    printf("njstest::Object::staticMul(%d, %d)\n", a, b);
+    printf("  [C++] test::Object::staticMul(%d, %d)\n", a, b);
     return a * b;
   }
 
@@ -77,7 +77,7 @@ struct Object {
 };
 
 // ============================================================================
-// [njstest::ObjectWrap]
+// [test::ObjectWrap]
 // ============================================================================
 
 // A wrapped class.
@@ -91,7 +91,7 @@ struct ObjectWrap {
   Object _obj;
 };
 
-} // njstest namespace
+} // test namespace
 
 // [Guard]
 #endif // _NJS_TEST_P_H

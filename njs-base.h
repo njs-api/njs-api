@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include <new>
+
 // ============================================================================
 // [njs::#defs]
 // ============================================================================
@@ -55,7 +57,7 @@
 #endif // !NJS_ASSERT
 
 // Miscellaneous macros used by NJS.
-#define NJS_NO_COPY(SELF) \
+#define NJS_NONCOPYABLE(SELF) \
 private: \
   NJS_INLINE SELF(const SELF&) NJS_NOEXCEPT; \
   NJS_INLINE SELF& operator=(const SELF&) NJS_NOEXCEPT; \
@@ -75,25 +77,25 @@ class Utf16Ref;
 
 // --- Provided by the VM engine ---
 
-// Runtime is mapped to the underlying VM runtime / heap. Each runtime can have
-// multiple separate contexts.
+//! Runtime is mapped to the underlying VM runtime / heap. Each runtime can have
+//! multiple separate contexts.
 class Runtime;
 
-// Basic context for interacting with VM. Hold all necessary variables to make
-// the interaction simple, but doesn't offer advanced features that require
-// to manage memory on the C++ side. See `ExecutionContext` for more powerful
-// interface.
+//! Basic context for interacting with VM. Holds all necessary variables to make
+//! the interaction simple, but doesn't offer advanced features that require
+//! memory management on C++ side. See `ExecutionContext` that provides an
+//! additional functionality.
 class Context;
 
-// Currently maps to `v8::HandleScope`.
+//! Handle scope if VM is using that concept, currently maps to `v8::HandleScope`.
 class HandleScope;
 
-// Scoped context is a `Context` and `HandleScope`. You should prefer this
-// context in case that you enter a call that was not triggered by the VM. For
-// example when an asynchronous task completes in node.js and the `AfterWork`
-// handler is called, you need to create `ScopedContext` instead of `Context`,
-// because no handle scope exist at that point, however, when a native function
-// is called by the VM there is already a `HandleScope`.
+//! Scoped context is a composition of `Context` and `HandleScope`. You should
+//! prefer this type of context in case that you enter a call that was not
+//! triggered by JS-VM. For example when an asynchronous task completes in node.js
+//! and the `AfterWork` handler is called by libuv, it's important to create a
+//! `ScopedContext` instead of just `Context`, because no handle scope exist at
+//! that point.
 class ScopedContext;
 
 class ExecutionContext;
@@ -101,26 +103,26 @@ class FunctionCallContext;
 class GetPropertyContext;
 class SetPropertyContext;
 
-// VM value types (handles).
+//! Local javascript value.
 class Value;
-class Persistent;
 
-namespace internal {
-  struct ResultPayload;
-} // internal namespace
+//! Persistent javascript value.
+class Persistent;
 
 // ============================================================================
 // [njs::Limits]
 // ============================================================================
 
-// Internal limits.
+//! NJS limits.
 enum Limits {
-  kMaxEnumLength = 64,
-  kMaxBufferSize = 128
-};
+  // NOTE: Other limits depend on VM. They should be established at the top of
+  // the VM implementation file.
 
-// Other limits depends on VM. They should be established at the top of the VM
-// implementation file.
+  //! Maximum length of a single enumeration (string).
+  kMaxEnumLength = 64,
+  //! Maximum length of a buffer used internally to format messages (errors).
+  kMaxBufferSize = 256
+};
 
 // ============================================================================
 // [njs::ValueType]
@@ -220,20 +222,15 @@ enum ResultCode {
   kResultInvalidHandle,
   kResultOutOfMemory,
 
-  // NJS errors simplifying class wrapping and arguments' extraction.
-  kResultInvalidArgumentCommon,
-  kResultInvalidArgumentValue,
-  kResultInvalidArgumentTypeId,
-  kResultInvalidArgumentTypeName,
-  kResultInvalidArgumentCount,
-
+  kResultInvalidValue,
+  kResultInvalidValueTypeId,
+  kResultInvalidValueTypeName,
+  kResultInvalidValueCustom,
+  kResultInvalidValueRange,
   kResultUnsafeInt64Conversion,
   kResultUnsafeUint64Conversion,
 
-  kResultInvalidValue,
-  kResultInvalidValueType,
-  kResultInvalidValueCommon,
-  kResultInvalidValueMinMax,
+  kResultInvalidArgumentsLength,
 
   kResultInvalidConstructCall,
   kResultAbstractConstructCall,
@@ -241,59 +238,26 @@ enum ResultCode {
   // This is not an error, it's telling the error handler to not handle the
   // error as the caller thrown an exception or did something else and wants
   // to finish the current call-chain.
-  kResultBypass
+  kResultBypass,
+
+  _kResultThrowFirst = kResultThrowError,
+  _kResultThrowLast = kResultThrowReferenceError,
+
+  _kResultValueFirst = kResultInvalidValue,
+  _kResultValueLast = kResultUnsafeUint64Conversion
 };
 
 // Result value - just a mark to indicate all APIs that returns `ResultCode`.
 typedef unsigned int Result;
 
 // ============================================================================
-// [njs::Maybe]
-// ============================================================================
-
-// Inspired in V8, however, holds `Result` instead of `bool`.
-template<typename T>
-class Maybe {
-public:
-  NJS_INLINE Maybe() NJS_NOEXCEPT
-    : _error(kResultOk),
-      _value() {}
-
-  NJS_INLINE Maybe(Result error, const T& value) NJS_NOEXCEPT
-    : _error(error),
-      _value(value) {}
-
-  NJS_INLINE bool IsOk() const NJS_NOEXCEPT { return _error == kResultOk; }
-
-  NJS_INLINE njs::Result Error() const NJS_NOEXCEPT { return _error; }
-  NJS_INLINE const T& Value() const NJS_NOEXCEPT { return _value; }
-
-  Result _error;
-  T _value;
-};
-
-// ============================================================================
-// [njs::NullType & UndefinedType]
-// ============================================================================
-
-// NOTE: These are just to trick C++ type system to return NULL and UNDEFINED
-// as some VMs have specialized methods for returning these. It's much concise
-// to write `Return(njs::Undefined)` than `ReturnUndefined()` and when using
-// V8 it may lead into a more optimized code.
-struct NullType {};
-struct UndefinedType {};
-
-static const NullType Null = {};
-static const UndefinedType Undefined = {};
-
-// ============================================================================
-// [njs::internal::TypeTraits]
+// [njs::Internal::TypeTraits]
 // ============================================================================
 
 // TODO:
 // [ ] Missing wchar_t, char16_t, char32_t
 // [ ] Any other types we should worry about?
-namespace internal {
+namespace Internal {
   enum TraitId {
     kTraitIdUnknown    = 0,
     kTraitIdBool       = 1,
@@ -369,16 +333,16 @@ namespace internal {
   NJS_INT_TRAITS(long long);
   NJS_INT_TRAITS(unsigned long long);
 #undef NJS_INT_TRAITS
-} // internal namespace
+} // Internal namespace
 
 // ============================================================================
-// [njs::internal::IntUtils]
+// [njs::IntUtils]
 // ============================================================================
 
-namespace internal {
+namespace IntUtils {
   template<typename In, typename Out, int IsNarrowing, int IsSigned>
   struct IntCastImpl {
-    static NJS_INLINE Result Op(In in, Out& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result op(In in, Out& out) NJS_NOEXCEPT {
       out = static_cast<Out>(in);
       return kResultOk;
     }
@@ -387,8 +351,8 @@ namespace internal {
   // Unsigned narrowing.
   template<typename In, typename Out>
   struct IntCastImpl<In, Out, 1, 0> {
-    static NJS_INLINE Result Op(In in, Out& out) NJS_NOEXCEPT {
-      if (in > static_cast<In>(TypeTraits<Out>::maxValue()))
+    static NJS_INLINE Result op(In in, Out& out) NJS_NOEXCEPT {
+      if (in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()))
         return kResultInvalidValue;
 
       out = static_cast<Out>(in);
@@ -399,9 +363,9 @@ namespace internal {
   // Signed narrowing.
   template<typename In, typename Out>
   struct IntCastImpl<In, Out, 1, 1> {
-    static NJS_INLINE Result Op(In in, Out& out) NJS_NOEXCEPT {
-      if (in < static_cast<In>(TypeTraits<Out>::minValue()) ||
-          in > static_cast<In>(TypeTraits<Out>::maxValue()) )
+    static NJS_INLINE Result op(In in, Out& out) NJS_NOEXCEPT {
+      if (in < static_cast<In>(Internal::TypeTraits<Out>::minValue()) ||
+          in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()) )
         return kResultInvalidValue;
 
       out = static_cast<Out>(in);
@@ -410,16 +374,16 @@ namespace internal {
   };
 
   template<typename In, typename Out>
-  NJS_INLINE Result IntCast(In in, Out& out) NJS_NOEXCEPT {
+  NJS_INLINE Result intCast(In in, Out& out) NJS_NOEXCEPT {
     return IntCastImpl<
       In, Out,
       (sizeof(In) > sizeof(Out)),
-      TypeTraits<In>::kIsSigned && TypeTraits<Out>::kIsSigned>::Op(in, out);
+      Internal::TypeTraits<In>::kIsSigned && Internal::TypeTraits<Out>::kIsSigned>::op(in, out);
   }
 
   template<typename T, size_t Size, int IsSigned>
   struct IsSafeIntImpl {
-    static NJS_INLINE bool Op(T x) NJS_NOEXCEPT {
+    static NJS_INLINE bool op(T x) NJS_NOEXCEPT {
       // [+] 32-bit and less are safe.
       // [+] 64-bit types are specialized.
       // [-] More than 64-bit types are not supported.
@@ -429,14 +393,14 @@ namespace internal {
 
   template<typename T>
   struct IsSafeIntImpl<T, 8, 0> {
-    static NJS_INLINE bool Op(T x) NJS_NOEXCEPT {
+    static NJS_INLINE bool op(T x) NJS_NOEXCEPT {
       return static_cast<uint64_t>(x) <= static_cast<uint64_t>(9007199254740991ull);
     }
   };
 
   template<typename T>
   struct IsSafeIntImpl<T, 8, 1> {
-    static NJS_INLINE bool Op(T x) NJS_NOEXCEPT {
+    static NJS_INLINE bool op(T x) NJS_NOEXCEPT {
       return static_cast<int64_t>(x) >= -static_cast<int64_t>(9007199254740991ll) &&
              static_cast<int64_t>(x) <=  static_cast<int64_t>(9007199254740991ll) ;
     }
@@ -450,11 +414,11 @@ namespace internal {
   //
   // but accessible from C++. The MAX_SAFE_INTEGER value is equivalent to 2^53 - 1.
   template<typename T>
-  NJS_INLINE bool IsSafeInt(T x) NJS_NOEXCEPT {
-    return internal::IsSafeIntImpl<T, sizeof(T), internal::TypeTraits<T>::kIsSigned>::Op(x);
+  NJS_INLINE bool isSafeInt(T x) NJS_NOEXCEPT {
+    return IsSafeIntImpl<T, sizeof(T), Internal::TypeTraits<T>::kIsSigned>::op(x);
   }
 
-  static NJS_INLINE Result DoubleToInt64(double in, int64_t& out) NJS_NOEXCEPT {
+  static NJS_INLINE Result doubleToInt64(double in, int64_t& out) NJS_NOEXCEPT {
     if (in >= -9007199254740991.0 && in <= 9007199254740991.0) {
       int64_t x = static_cast<int64_t>(in);
       if (static_cast<double>(x) == in) {
@@ -466,7 +430,7 @@ namespace internal {
     return kResultInvalidValue;
   }
 
-  static NJS_INLINE Result DoubleToUint64(double in, uint64_t& out) NJS_NOEXCEPT {
+  static NJS_INLINE Result doubleToUint64(double in, uint64_t& out) NJS_NOEXCEPT {
     if (in >= 0.0 && in <= 9007199254740991.0) {
       int64_t x = static_cast<int64_t>(in);
       if (static_cast<double>(x) == in) {
@@ -477,20 +441,20 @@ namespace internal {
 
     return kResultInvalidValue;
   }
-} // internal namespace
+} // IntUtils namespace
 
 // ============================================================================
-// [njs::internal::StrUtils]
+// [njs::StrUtils]
 // ============================================================================
 
-namespace internal {
+namespace StrUtils {
   // Inlining probably doesn't matter here, `vsnprintf` is complex and one more
   // function call shouldn't make any difference here, so don't inline.
   //
   // NOTE: This function doesn't guarantee NULL termination, this means that the
   // return value has to be USED. This is no problem for NJS library as all VM
   // calls allow to specify the length of the string(s) passed.
-  static NJS_NOINLINE unsigned int StrVFormat(char* dst, size_t maxLength, const char* fmt, va_list ap) NJS_NOEXCEPT {
+  static NJS_NOINLINE unsigned int vsformat(char* dst, size_t maxLength, const char* fmt, va_list ap) NJS_NOEXCEPT {
 #if defined(_MSC_VER) && _MSC_VER < 1900
     int result = ::_vsnprintf(dst, maxLength, fmt, ap);
 #else
@@ -509,18 +473,18 @@ namespace internal {
   // Cannot be inlined, some compilers (like GCC) have problems with variable
   // argument functions declared as __always_inline__.
   //
-  // NOTE: The function has the same behavior as `StrVFormat()`.
-  static NJS_NOINLINE unsigned int StrFormat(char* dst, size_t maxLength, const char* fmt, ...) NJS_NOEXCEPT {
+  // NOTE: The function has the same behavior as `vsformat()`.
+  static NJS_NOINLINE unsigned int sformat(char* dst, size_t maxLength, const char* fmt, ...) NJS_NOEXCEPT {
     va_list ap;
     va_start(ap, fmt);
-    unsigned int result = StrVFormat(dst, maxLength, fmt, ap);
+    unsigned int result = vsformat(dst, maxLength, fmt, ap);
     va_end(ap);
     return result;
   }
 
   // Required mostly by `Utf16` string, generalized for any type.
   template<typename CharType>
-  NJS_INLINE size_t StrLen(const CharType* str) NJS_NOEXCEPT {
+  NJS_INLINE size_t slen(const CharType* str) NJS_NOEXCEPT {
     NJS_ASSERT(str != NULL);
 
     size_t i = 0;
@@ -530,44 +494,59 @@ namespace internal {
   }
   // Specialize a bit...
   template<>
-  NJS_INLINE size_t StrLen(const char* str) NJS_NOEXCEPT {
-    return ::strlen(str);
-  }
-} // internal namespace
+  NJS_INLINE size_t slen(const char* str) NJS_NOEXCEPT { return ::strlen(str); }
+}
 
 // ============================================================================
 // [njs::StrRef]
 // ============================================================================
 
+//! Reference (const or mutable) to an array of characters representing a string.
+//!
+//! This is used as a base class that is inherited by:
+//!   - `Latin1Ref`
+//!   - `Utf8Ref`
+//!   - `Utf16Ref`
+//!
+//! NOTE: This class is not designed to be a string container. It's rather used
+//! as a wrapper of your own string that just provides string encoding. For
+//! example both `Latin1Ref` and `Utf8Ref` can be used to create a string.
 template<typename T>
 class StrRef {
-  NJS_NO_COPY(StrRef<T>)
-
 public:
   typedef T Type;
 
-  explicit NJS_INLINE StrRef() NJS_NOEXCEPT { Reset(); }
-  explicit NJS_INLINE StrRef(T* data) NJS_NOEXCEPT { SetData(data); }
-  NJS_INLINE StrRef(T* data, size_t length) NJS_NOEXCEPT { SetData(data, length); }
+  NJS_INLINE StrRef() NJS_NOEXCEPT { reset(); }
+  explicit NJS_INLINE StrRef(T* data) NJS_NOEXCEPT { init(data); }
+  NJS_INLINE StrRef(T* data, size_t length) NJS_NOEXCEPT { init(data, length); }
+  NJS_INLINE StrRef(const StrRef<T>& other) NJS_NOEXCEPT { init(other); }
 
-  NJS_INLINE void Reset() NJS_NOEXCEPT {
+  NJS_INLINE bool isInitialized() const NJS_NOEXCEPT {
+    return _data != NULL;
+  }
+
+  NJS_INLINE void reset() NJS_NOEXCEPT {
     _data = NULL;
     _length = 0;
   }
 
-  NJS_INLINE void SetData(T* data) NJS_NOEXCEPT {
-    _data = data;
-    _length = internal::StrLen(data);
+  NJS_INLINE void init(T* data) NJS_NOEXCEPT {
+    init(data, StrUtils::slen(data));
   }
 
-  NJS_INLINE void SetData(T* data, size_t length) NJS_NOEXCEPT {
+  NJS_INLINE void init(T* data, size_t length) NJS_NOEXCEPT {
     _data = data;
     _length = length;
   }
 
-  NJS_INLINE bool HasData() const NJS_NOEXCEPT { return _data != NULL; }
-  NJS_INLINE T* GetData() const NJS_NOEXCEPT { return _data; }
-  NJS_INLINE size_t GetLength() const NJS_NOEXCEPT { return _length; }
+  NJS_INLINE void init(const StrRef<T>& other) NJS_NOEXCEPT {
+    _data = other._data;
+    _length = other._length;
+  }
+
+  NJS_INLINE bool hasData() const NJS_NOEXCEPT { return _data != NULL; }
+  NJS_INLINE T* getData() const NJS_NOEXCEPT { return _data; }
+  NJS_INLINE size_t getLength() const NJS_NOEXCEPT { return _length; }
 
   // ------------------------------------------------------------------------
   // [Members]
@@ -588,6 +567,9 @@ public:
 
   NJS_INLINE Latin1Ref(const char* data, size_t length) NJS_NOEXCEPT
     : StrRef(data, length) {}
+
+  NJS_INLINE Latin1Ref(const Latin1Ref& other) NJS_NOEXCEPT
+    : StrRef(other) {}
 };
 
 // ============================================================================
@@ -601,6 +583,9 @@ public:
 
   NJS_INLINE Utf8Ref(const char* data, size_t length) NJS_NOEXCEPT
     : StrRef(data, length) {}
+
+  NJS_INLINE Utf8Ref(const Utf8Ref& other) NJS_NOEXCEPT
+    : StrRef(other) {}
 };
 
 // ============================================================================
@@ -614,6 +599,9 @@ public:
 
   NJS_INLINE Utf16Ref(const uint16_t* data, size_t length) NJS_NOEXCEPT
     : StrRef(data, length) {}
+
+  NJS_INLINE Utf16Ref(const Utf16Ref& other) NJS_NOEXCEPT
+    : StrRef(other) {}
 };
 
 // ============================================================================
@@ -621,19 +609,21 @@ public:
 // ============================================================================
 
 template<typename T>
-struct Range {
-  enum { kConceptType = kConceptValidator };
+class Range {
+public:
   typedef T Type;
+
+  enum { kConceptType = kConceptValidator };
 
   NJS_INLINE Range<T>(Type minValue, Type maxValue) NJS_NOEXCEPT
     : _minValue(minValue),
       _maxValue(maxValue) {}
 
-  NJS_INLINE Result Validate(const Type& value) const NJS_NOEXCEPT {
+  NJS_INLINE Result validate(const Type& value) const NJS_NOEXCEPT {
     if (value >= _minValue && value <= _maxValue)
       return kResultOk;
     else
-      return kResultInvalidValueMinMax;
+      return kResultInvalidValueRange;
   }
 
   Type _minValue;
@@ -641,13 +631,41 @@ struct Range {
 };
 
 // ============================================================================
+// [njs::BindingItem]
+// ============================================================================
+
+//! Information about a single binding item used to declaratively bind a C++
+//! class into JavaScript. Each `BindingItem` contains information about a
+//! getter|setter, static (class) function, or a member function.
+struct BindingItem {
+  NJS_INLINE BindingItem(int type, int flags, const char* name, const void* data) NJS_NOEXCEPT
+    : type(type),
+      flags(flags),
+      name(name),
+      data(data) {}
+
+  enum Type {
+    kTypeInvalid = 0,
+    kTypeStatic = 1,
+    kTypeMethod = 2,
+    kTypeGetter = 3,
+    kTypeSetter = 4
+  };
+
+  unsigned int type;         //!< Type of the item.
+  unsigned int flags;        //!< Flags.
+  const char* name;          //!< Name (function name, property name, etc...).
+  const void* data;          //!< Data (function pointer).
+};
+
+// ============================================================================
 // [njs::StaticData]
 // ============================================================================
 
-// Minimal const data that is used to improve and unify error handling.
-//
-// NOTE: Do not add useless members here, a copy will be embedded in every
-// executable and shared object that accesses it (which is likely to be true).
+//! Minimal read-only data that is used to improve and unify error handling.
+//!
+//! NOTE: Do not add useless members here, a copy will be embedded in every
+//! executable and shared object that uses this data, so keep it lightweight.
 struct StaticData {
   // --------------------------------------------------------------------------
   // [Accessors]
@@ -716,81 +734,284 @@ static const StaticData _staticData = {
 };
 
 // ============================================================================
-// [njs::internal::BindingItem]
+// [njs::ResultPayload]
 // ============================================================================
 
-namespace internal {
-  // Information about a single binding item used to declaratively bind a C++
-  // class into JavaScript. Each `BindingItem` contains an information about
-  // a getter/setter, static (class) function, or a member function.
-  struct BindingItem {
-    NJS_INLINE BindingItem(int type, int flags, const char* name, const void* data) NJS_NOEXCEPT
-      : type(type),
-        flags(flags),
-        name(name),
-        data(data) {}
+//! Result payload.
+//!
+//! This data structure holds extra payload associated with `Result` code that
+//! can be used to produce a more meaningful message than "Invalid argument"
+//! and similar. The purpose is to bring a minimal set of failure information
+//! to users of native addons. It should help with API misuse and with finding
+//! where the error happened and why.
+//!
+//! NOTE: Only first two members of this data is initialized (or reset) by
+//! `reset()` method for performance reasons. Based on the error type and
+//! content of these values other members can be used, but not without
+//! checking `isInitialized()` first.
+struct ResultPayload {
+  // ------------------------------------------------------------------------
+  // [Reset]
+  // ------------------------------------------------------------------------
 
-    enum Type {
-      kTypeInvalid = 0,
-      kTypeStatic = 1,
-      kTypeMethod = 2,
-      kTypeGetter = 3,
-      kTypeSetter = 4
-    };
+  //! Get if this `ResultPayload` data is initialized.
+  NJS_INLINE bool isInitialized() const NJS_NOEXCEPT { return any.first != -1; }
 
-    // Type of the item.
-    unsigned int type;
-    // Flags.
-    unsigned int flags;
-    // Name (function name, property name, etc...).
-    const char* name;
-    // Data (function pointer).
-    const void* data;
+  //! Has to be called to reset the content of payload. It resets only one
+  //! member for efficiency. If this member is set then the payload is valid,
+  //! otherwise it's invalid or not set.
+  NJS_INLINE void reset() NJS_NOEXCEPT {
+    any.first  = static_cast<intptr_t>(-1);
+    any.second = static_cast<intptr_t>(-1);
+  }
+
+  // ------------------------------------------------------------------------
+  // [Accessors]
+  // ------------------------------------------------------------------------
+
+  NJS_INLINE bool hasArgument() const NJS_NOEXCEPT { return value.argIndex != -1; }
+  NJS_INLINE bool hasValue() const NJS_NOEXCEPT { return any.second != -1; }
+
+  // --------------------------------------------------------------------------
+  // [Members]
+  // --------------------------------------------------------------------------
+
+  struct AnyData {
+    intptr_t first;
+    intptr_t second;
   };
-} // internal namespace
+
+  struct ErrorData {
+    const char* message;
+  };
+
+  struct ValueData {
+    intptr_t argIndex;
+    union {
+      uintptr_t typeId;
+      const char* typeName;
+      const char* message;
+    };
+  };
+
+  struct ArgumentsData {
+    intptr_t minArgs;
+    intptr_t maxArgs;
+  };
+
+  struct ConstructCallData {
+    const char* className;
+  };
+
+  union {
+    AnyData any;
+    ErrorData error;
+    ValueData value;
+    ArgumentsData arguments;
+    ConstructCallData constructCall;
+  };
+
+  //! Static buffer for temporary strings.
+  char staticBuffer[kMaxBufferSize];
+};
+
+// ============================================================================
+// [njs::ResultMixin]
+// ============================================================================
+
+//! Result mixin, provides methods that can be used by `ExecutionContext`. The
+//! purpose of this mixin is to define methods that are generic and then simply
+//! reused by all VM backend.
+class ResultMixin {
+public:
+  NJS_INLINE ResultMixin() NJS_NOEXCEPT { _payload.reset(); }
+
+  // ------------------------------------------------------------------------
+  // [Throw Exception]
+  // ------------------------------------------------------------------------
+
+  // ------------------------------------------------------------------------
+  // [Invalid Value / Argument]
+  // ------------------------------------------------------------------------
+
+  NJS_INLINE Result invalidValue() NJS_NOEXCEPT {
+    return kResultInvalidValue;
+  }
+
+  NJS_INLINE Result invalidValueTypeId(uint32_t typeId) NJS_NOEXCEPT {
+    _payload.value.typeId = typeId;
+    return kResultInvalidValueTypeId;
+  }
+
+  NJS_INLINE Result invalidValueTypeName(const char* typeName) NJS_NOEXCEPT {
+    _payload.value.typeName = typeName;
+    return kResultInvalidValueTypeName;
+  }
+
+  NJS_INLINE Result invalidValueCustom(const char* message) NJS_NOEXCEPT {
+    _payload.value.message = message;
+    return kResultInvalidValueCustom;
+  }
+
+  NJS_INLINE Result invalidArgument() NJS_NOEXCEPT {
+    _payload.value.argIndex = -2;
+    return kResultInvalidValue;
+  }
+
+  NJS_INLINE Result invalidArgument(unsigned int index) NJS_NOEXCEPT {
+    _payload.value.argIndex = static_cast<intptr_t>(index);
+    return kResultInvalidValue;
+  }
+
+  NJS_INLINE Result invalidArgumentTypeId(unsigned int index, uint32_t typeId) NJS_NOEXCEPT {
+    _payload.value.argIndex = static_cast<intptr_t>(index);
+    _payload.value.typeId = typeId;
+    return kResultInvalidValueTypeId;
+  }
+
+  NJS_INLINE Result invalidArgumentTypeName(unsigned int index, const char* typeName) NJS_NOEXCEPT {
+    _payload.value.argIndex = static_cast<intptr_t>(index);
+    _payload.value.typeName = typeName;
+    return kResultInvalidValueTypeName;
+  }
+
+  NJS_INLINE Result invalidArgumentCustom(unsigned int index, const char* message) NJS_NOEXCEPT {
+    _payload.value.argIndex = static_cast<intptr_t>(index);
+    _payload.value.message = message;
+    return kResultInvalidValueCustom;
+  }
+
+  // ------------------------------------------------------------------------
+  // [Invalid Arguments Length]
+  // ------------------------------------------------------------------------
+
+  NJS_INLINE Result invalidArgumentsLength() NJS_NOEXCEPT {
+    return kResultInvalidArgumentsLength;
+  }
+
+  NJS_INLINE Result invalidArgumentsLength(unsigned int numArgs) NJS_NOEXCEPT {
+    _payload.arguments.minArgs = static_cast<intptr_t>(numArgs);
+    _payload.arguments.maxArgs = static_cast<intptr_t>(numArgs);
+    return kResultInvalidArgumentsLength;
+  }
+
+  NJS_INLINE Result invalidArgumentsRange(unsigned int minArgs, unsigned int maxArgs) NJS_NOEXCEPT {
+    _payload.arguments.minArgs = static_cast<intptr_t>(minArgs);
+    _payload.arguments.maxArgs = static_cast<intptr_t>(maxArgs);
+    return kResultInvalidArgumentsLength;
+  }
+
+  // ------------------------------------------------------------------------
+  // [Invalid Construct-Call]
+  // ------------------------------------------------------------------------
+
+  NJS_INLINE Result invalidConstructCall() NJS_NOEXCEPT {
+    return kResultInvalidConstructCall;
+  }
+
+  NJS_INLINE Result invalidConstructCall(const char* className) NJS_NOEXCEPT {
+    _payload.constructCall.className = className;
+    return kResultInvalidConstructCall;
+  }
+
+  NJS_INLINE Result abstractConstructCall() NJS_NOEXCEPT {
+    return kResultAbstractConstructCall;
+  }
+
+  NJS_INLINE Result abstractConstructCall(const char* className) NJS_NOEXCEPT {
+    _payload.constructCall.className = className;
+    return kResultAbstractConstructCall;
+  }
+
+  // ------------------------------------------------------------------------
+  // [Members]
+  // ------------------------------------------------------------------------
+
+  ResultPayload _payload;
+};
+
+// ============================================================================
+// [njs::Maybe]
+// ============================================================================
+
+// Inspired in V8, however, holds `Result` instead of `bool`.
+template<typename T>
+class Maybe {
+public:
+  NJS_INLINE Maybe() NJS_NOEXCEPT
+    : _value(),
+      _result(kResultOk) {}
+
+  NJS_INLINE Maybe(Result result, const T& value) NJS_NOEXCEPT
+    : _value(value),
+      _result(result) {}
+
+  NJS_INLINE bool isOk() const NJS_NOEXCEPT { return _result == kResultOk; }
+  NJS_INLINE const T& value() const NJS_NOEXCEPT { return _value; }
+  NJS_INLINE njs::Result result() const NJS_NOEXCEPT { return _result; }
+
+  T _value;
+  Result _result;
+};
+
+// ============================================================================
+// [njs::NullType & UndefinedType]
+// ============================================================================
+
+// NOTE: These are just to trick C++ type system to return NULL and UNDEFINED
+// as some VMs have specialized methods for returning these. It's much more
+// convenient to write `returnValue(njs::Undefined)` rather than `returnUndefined()`.
+struct NullType {};
+struct UndefinedType {};
+
+static const NullType Null = {};
+static const UndefinedType Undefined = {};
 
 // ============================================================================
 // [njs::ResultOf & NJS_CHECK]
 // ============================================================================
 
-// Used internally to get a result of an operation that can fail. There are
-// many areas where an invalid handle can be returned instead of a `Result`.
-// VM bridges may overload it and propagate a specific error in such case.
+//! Used internally to get a result of an operation that can fail. There are
+//! many areas where an invalid handle can be returned instead of a `Result`.
+//! VM bridges may overload it and propagate a specific error in such case.
+//!
+//! By default no implementation for `T` is provided, thus it would be compile
+//! time error if used with non-implemented type.
 template<typename T>
-NJS_INLINE Result ResultOf(const T& in) NJS_NOEXCEPT;
-// TODO: Doesn't have to be implemented, right? {
-//  NJS_ASSERT(!"njs::ResultOf<> has no overload for a given type");
-//  return kResultInvalidState;
-//}
+NJS_INLINE Result resultOf(const T& in) NJS_NOEXCEPT;
 
 template<>
-NJS_INLINE Result ResultOf(const Result& in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(const Result& in) NJS_NOEXCEPT {
+  // Provided for convenience.
   return in;
 }
 
 template<typename T>
-NJS_INLINE Result ResultOf(T* in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(T* in) NJS_NOEXCEPT {
+  // Null-pointer check, used after memory allocation or `new(std::nothrow)`.
   return in ? kResultOk : kResultOutOfMemory;
 }
 
 template<typename T>
-NJS_INLINE Result ResultOf(const T* in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(const T* in) NJS_NOEXCEPT {
+  // The same as above, specialized for `const T*`.
   return in ? kResultOk : kResultOutOfMemory;
 }
 
 template<typename T>
-NJS_INLINE Result ResultOf(const Maybe<T>& in) NJS_NOEXCEPT {
-  return in.Result();
+NJS_INLINE Result resultOf(const Maybe<T>& in) NJS_NOEXCEPT {
+  // Just pass the result of Maybe<T> handle.
+  return in.result();
 }
 
-// Part of the NJS-API - these must be provided by the engine and
-// returns `kResultInvalidHandle` in case the handle is invalid.
+// Part of the NJS-API - these must be provided by the engine and return
+// `kResultInvalidHandle` in case the handle is not valid.
 template<>
-NJS_INLINE Result ResultOf(const Value& in) NJS_NOEXCEPT;
+NJS_INLINE Result resultOf(const Value& in) NJS_NOEXCEPT;
 
 #define NJS_CHECK(...) \
   do { \
-    ::njs::Result result_ = ::njs::ResultOf(__VA_ARGS__); \
+    ::njs::Result result_ = ::njs::resultOf(__VA_ARGS__); \
     if (result_ != 0) { \
       return result_; \
     } \

@@ -27,16 +27,16 @@ namespace njs {
 
 // These are needed to make things a bit simpler and minimize the number of
 // functions that have to be forward-declared.
-namespace internal {
+namespace Internal {
   // Provided after `Context`. This is just a convenience function that
   // allows to get V8's `v8::Isolate` from `njs::Context` before it's defined.
-  static NJS_INLINE v8::Isolate* GetV8IsolateOfContext(Context& ctx) NJS_NOEXCEPT;
+  static NJS_INLINE v8::Isolate* v8GetIsolateOfContext(Context& ctx) NJS_NOEXCEPT;
 
   // Provided after `Value`. These are just a convenience functions that allow
   // to get the V8' `v8::Local<v8::Value>` from `njs::Value` before it's defined.
-  static NJS_INLINE v8::Local<v8::Value>& V8HandleOfValue(Value& value) NJS_NOEXCEPT;
-  static NJS_INLINE const v8::Local<v8::Value>& V8HandleOfValue(const Value& value) NJS_NOEXCEPT;
-} // internal namespace
+  static NJS_INLINE v8::Local<v8::Value>& v8HandleOfValue(Value& value) NJS_NOEXCEPT;
+  static NJS_INLINE const v8::Local<v8::Value>& v8HandleOfValue(const Value& value) NJS_NOEXCEPT;
+} // Internal namespace
 
 // ============================================================================
 // [njs::Limits]
@@ -48,57 +48,30 @@ static const size_t kMaxStringLength = static_cast<size_t>(v8::String::kMaxLengt
 // [njs::ResultOf]
 // ============================================================================
 
-// V8 specializations of `njs::ResultOf<>`.
+// V8 specializations of `njs::resultOf<>`.
 template<typename T>
-NJS_INLINE Result ResultOf(const v8::Local<T>& in) NJS_NOEXCEPT {
-  if (in.IsEmpty())
-    return kResultInvalidHandle;
-
-  return kResultOk;
-}
+NJS_INLINE Result resultOf(const v8::Local<T>& in) NJS_NOEXCEPT { return in.IsEmpty() ? kResultInvalidHandle : kResultOk; }
 
 template<typename T>
-NJS_INLINE Result ResultOf(const v8::MaybeLocal<T>& in) NJS_NOEXCEPT {
-  if (in.IsEmpty())
-    return kResultInvalidHandle;
-
-  return kResultOk;
-}
+NJS_INLINE Result resultOf(const v8::MaybeLocal<T>& in) NJS_NOEXCEPT { return in.IsEmpty() ? kResultInvalidHandle : kResultOk; }
 
 template<typename T>
-NJS_INLINE Result ResultOf(const v8::Persistent<T>& in) NJS_NOEXCEPT {
-  if (in.IsEmpty())
-    return kResultInvalidHandle;
-
-  return kResultOk;
-}
+NJS_INLINE Result resultOf(const v8::Persistent<T>& in) NJS_NOEXCEPT { return in.IsEmpty() ? kResultInvalidHandle : kResultOk; }
 
 template<typename T>
-NJS_INLINE Result ResultOf(const v8::Global<T>& in) NJS_NOEXCEPT {
-  if (in.IsEmpty())
-    return kResultInvalidHandle;
-
-  return kResultOk;
-}
+NJS_INLINE Result resultOf(const v8::Global<T>& in) NJS_NOEXCEPT { return in.IsEmpty() ? kResultInvalidHandle : kResultOk; }
 
 template<typename T>
-NJS_INLINE Result ResultOf(const v8::Eternal<T>& in) NJS_NOEXCEPT {
-  if (in.IsEmpty())
-    return kResultInvalidHandle;
-
-  return kResultOk;
-}
+NJS_INLINE Result resultOf(const v8::Eternal<T>& in) NJS_NOEXCEPT { return in.IsEmpty() ? kResultInvalidHandle : kResultOk; }
 
 template<>
-NJS_INLINE Result ResultOf(const Value& in) NJS_NOEXCEPT {
-  return ResultOf(internal::V8HandleOfValue(in));
-}
+NJS_INLINE Result resultOf(const Value& in) NJS_NOEXCEPT { return resultOf(Internal::v8HandleOfValue(in)); }
 
 // ============================================================================
-// [njs::internal::V8 Helpers]
+// [njs::Internal::V8 Helpers]
 // ============================================================================
 
-namespace internal {
+namespace Internal {
   // V8 specific destroy callback.
   typedef void (*V8WrapDestroyCallback)(const v8::WeakCallbackData<v8::Value, void>& data);
 
@@ -109,7 +82,7 @@ namespace internal {
   // keep things simple and to check for invalid handles instead of introduction yet
   // another handle type in NJS.
   template<typename Type>
-  static NJS_INLINE const v8::Local<Type>& V8LocalFromMaybe(const v8::MaybeLocal<Type>& in) NJS_NOEXCEPT {
+  static NJS_INLINE const v8::Local<Type>& v8LocalFromMaybe(const v8::MaybeLocal<Type>& in) NJS_NOEXCEPT {
     // Implements the following pattern:
     //
     //   v8::Local<Type> out;
@@ -126,39 +99,39 @@ namespace internal {
   // uses a different V8 constructor. The `type` argument matches V8's
   // `NewStringType` and can be used to create internalized strings.
   template<typename StrRef>
-  NJS_INLINE v8::Local<v8::Value> V8NewString(Context& ctx, const StrRef& str, v8::NewStringType type) NJS_NOEXCEPT;
+  NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const StrRef& str, v8::NewStringType type) NJS_NOEXCEPT;
 
   template<>
-  NJS_INLINE v8::Local<v8::Value> V8NewString(Context& ctx, const Latin1Ref& str, v8::NewStringType type) NJS_NOEXCEPT {
-    if (str.GetLength() > kMaxStringLength)
+  NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const Latin1Ref& str, v8::NewStringType type) NJS_NOEXCEPT {
+    if (str.getLength() > kMaxStringLength)
       return v8::Local<v8::Value>();
 
-    return V8LocalFromMaybe<v8::String>(
+    return v8LocalFromMaybe<v8::String>(
       v8::String::NewFromOneByte(
-        GetV8IsolateOfContext(ctx),
-        reinterpret_cast<const uint8_t*>(str.GetData()), type, static_cast<int>(str.GetLength())));
+        v8GetIsolateOfContext(ctx),
+        reinterpret_cast<const uint8_t*>(str.getData()), type, static_cast<int>(str.getLength())));
   }
 
   template<>
-  NJS_INLINE v8::Local<v8::Value> V8NewString(Context& ctx, const Utf8Ref& str, v8::NewStringType type) NJS_NOEXCEPT {
-    if (str.GetLength() > kMaxStringLength)
+  NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const Utf8Ref& str, v8::NewStringType type) NJS_NOEXCEPT {
+    if (str.getLength() > kMaxStringLength)
       return v8::Local<v8::Value>();
 
-    return V8LocalFromMaybe<v8::String>(
+    return v8LocalFromMaybe<v8::String>(
       v8::String::NewFromUtf8(
-        GetV8IsolateOfContext(ctx),
-        str.GetData(), type, static_cast<int>(str.GetLength())));
+        v8GetIsolateOfContext(ctx),
+        str.getData(), type, static_cast<int>(str.getLength())));
   }
 
   template<>
-  NJS_INLINE v8::Local<v8::Value> V8NewString(Context& ctx, const Utf16Ref& str, v8::NewStringType type) NJS_NOEXCEPT {
-    if (str.GetLength() > kMaxStringLength)
+  NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const Utf16Ref& str, v8::NewStringType type) NJS_NOEXCEPT {
+    if (str.getLength() > kMaxStringLength)
       return v8::Local<v8::Value>();
 
-    return V8LocalFromMaybe<v8::String>(
+    return v8LocalFromMaybe<v8::String>(
       v8::String::NewFromTwoByte(
-        GetV8IsolateOfContext(ctx),
-        str.GetData(), type, static_cast<int>(str.GetLength())));
+        v8GetIsolateOfContext(ctx),
+        str.getData(), type, static_cast<int>(str.getLength())));
   }
 
   // Conversion from `T` to V8's `Local<Value>`. Conversions are only possible
@@ -171,113 +144,113 @@ namespace internal {
   struct V8ConvertImpl {};
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdBool> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
-      out = v8::Boolean::New(GetV8IsolateOfContext(ctx), in);
+  struct V8ConvertImpl<T, kTraitIdBool> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+      out = v8::Boolean::New(v8GetIsolateOfContext(ctx), in);
       return kResultOk;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsBoolean())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
       out = v8::Boolean::Cast(*in)->Value();
       return kResultOk;
     }
   };
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdSafeInt> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
-      out = v8::Integer::New(GetV8IsolateOfContext(ctx), in);
+  struct V8ConvertImpl<T, kTraitIdSafeInt> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+      out = v8::Integer::New(v8GetIsolateOfContext(ctx), in);
       return !out.IsEmpty() ? kResultOk : kResultBypass;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsInt32())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
 
       int32_t value = v8::Int32::Cast(*in)->Value();
-      return internal::IntCast(value, out);
+      return IntUtils::intCast(value, out);
     }
   };
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdSafeUint> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
-      out = v8::Integer::New(GetV8IsolateOfContext(ctx), in);
+  struct V8ConvertImpl<T, kTraitIdSafeUint> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+      out = v8::Integer::New(v8GetIsolateOfContext(ctx), in);
       return !out.IsEmpty() ? kResultOk : kResultBypass;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsUint32())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
 
       uint32_t value = v8::Uint32::Cast(*in)->Value();
-      return internal::IntCast(value, out);
+      return IntUtils::intCast(value, out);
     }
   };
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdUnsafeInt> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+  struct V8ConvertImpl<T, kTraitIdUnsafeInt> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
       // Fast-case: Most of the time if we hit packing int64_t to JS value it's
       // because of `size_t` and similar types. These types will hardly contain
       // value that is only representable as `int64_t` so we prefer this path
       // that creates a JavaScript integer, which can be then optimized by V8.
-      if (in >= static_cast<T>(internal::TypeTraits<int32_t>::minValue()) &&
-          in <= static_cast<T>(internal::TypeTraits<int32_t>::maxValue())) {
-        out = v8::Integer::New(GetV8IsolateOfContext(ctx), static_cast<int32_t>(in));
+      if (in >= static_cast<T>(TypeTraits<int32_t>::minValue()) &&
+          in <= static_cast<T>(TypeTraits<int32_t>::maxValue())) {
+        out = v8::Integer::New(v8GetIsolateOfContext(ctx), static_cast<int32_t>(in));
       }
       else {
-        if (!internal::IsSafeInt<T>(in))
+        if (!IntUtils::isSafeInt<T>(in))
           return kResultUnsafeInt64Conversion;
-        out = v8::Number::New(GetV8IsolateOfContext(ctx), static_cast<double>(in));
+        out = v8::Number::New(v8GetIsolateOfContext(ctx), static_cast<double>(in));
       }
 
       return !out.IsEmpty() ? kResultOk : kResultBypass;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsNumber())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
 
-      return internal::DoubleToInt64(v8::Number::Cast(*in)->Value(), out);
+      return IntUtils::doubleToInt64(v8::Number::Cast(*in)->Value(), out);
     }
   };
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdUnsafeUint> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+  struct V8ConvertImpl<T, kTraitIdUnsafeUint> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
       // The same trick as in kTraitIdUnsafeInt.
-      if (in <= static_cast<T>(internal::TypeTraits<uint32_t>::maxValue())) {
-        out = v8::Integer::NewFromUnsigned(GetV8IsolateOfContext(ctx), static_cast<uint32_t>(in));
+      if (in <= static_cast<T>(TypeTraits<uint32_t>::maxValue())) {
+        out = v8::Integer::NewFromUnsigned(v8GetIsolateOfContext(ctx), static_cast<uint32_t>(in));
       }
       else {
-        if (!internal::IsSafeInt<T>(in))
+        if (!IntUtils::isSafeInt<T>(in))
           return kResultUnsafeInt64Conversion;
-        out = v8::Number::New(GetV8IsolateOfContext(ctx), static_cast<double>(in));
+        out = v8::Number::New(v8GetIsolateOfContext(ctx), static_cast<double>(in));
       }
       return !out.IsEmpty() ? kResultOk : kResultBypass;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsNumber())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
 
-      return internal::DoubleToUint64(v8::Number::Cast(*in)->Value(), out);
+      return IntUtils::doubleToUint64(v8::Number::Cast(*in)->Value(), out);
     }
   };
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdFloat> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
-      out = v8::Number::New(GetV8IsolateOfContext(ctx), static_cast<double>(in));
+  struct V8ConvertImpl<T, kTraitIdFloat> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+      out = v8::Number::New(v8GetIsolateOfContext(ctx), static_cast<double>(in));
       return kResultOk;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsNumber())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
 
       out = static_cast<T>(v8::Number::Cast(*in)->Value());
       return kResultOk;
@@ -285,15 +258,15 @@ namespace internal {
   };
 
   template<typename T>
-  struct V8ConvertImpl<T, internal::kTraitIdDouble> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
-      out = v8::Number::New(GetV8IsolateOfContext(ctx), in);
+  struct V8ConvertImpl<T, kTraitIdDouble> {
+    static NJS_INLINE Result pack(Context& ctx, const T& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+      out = v8::Number::New(v8GetIsolateOfContext(ctx), in);
       return kResultOk;
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
       if (!in->IsNumber())
-        return kResultInvalidValueType;
+        return kResultInvalidValue;
 
       out = v8::Number::Cast(*in)->Value();
       return kResultOk;
@@ -306,57 +279,57 @@ namespace internal {
 
   template<typename T, typename Concept>
   struct V8ConvertWithConceptImpl<T, Concept, kConceptSerializer> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, Value& out, const Concept& concept) NJS_NOEXCEPT {
-      return concept.Serialize(ctx, in, out);
+    static NJS_INLINE Result pack(Context& ctx, const T& in, Value& out, const Concept& concept) NJS_NOEXCEPT {
+      return concept.serialize(ctx, in, out);
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
-      return concept.Deserialize(ctx, in, out);
+    static NJS_INLINE Result unpack(Context& ctx, const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
+      return concept.deserialize(ctx, in, out);
     }
   };
 
   template<typename T, typename Concept>
   struct V8ConvertWithConceptImpl<T, Concept, kConceptValidator> {
-    static NJS_INLINE Result Pack(Context& ctx, const T& in, Value& out, const Concept& concept) NJS_NOEXCEPT {
-      NJS_CHECK(concept.Validate(in));
-      return V8ConvertImpl<T, TypeTraits<T>::kTraitId>::Pack(ctx, in, out);
+    static NJS_INLINE Result pack(Context& ctx, const T& in, Value& out, const Concept& concept) NJS_NOEXCEPT {
+      NJS_CHECK(concept.validate(in));
+      return V8ConvertImpl<T, TypeTraits<T>::kTraitId>::pack(ctx, in, out);
     }
 
-    static NJS_INLINE Result Unpack(Context& ctx, const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
-      NJS_CHECK(V8ConvertImpl<T, TypeTraits<T>::kTraitId>::Unpack(ctx, V8HandleOfValue(in), out));
-      return concept.Validate(out);
+    static NJS_INLINE Result unpack(Context& ctx, const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
+      NJS_CHECK(V8ConvertImpl<T, TypeTraits<T>::kTraitId>::unpack(ctx, v8HandleOfValue(in), out));
+      return concept.validate(out);
     }
   };
 
   // Helpers to unpack a primitive value of type `T` from V8's `Value` handle. All
   // specializations MUST BE forward-declared here.
   template<typename T>
-  NJS_INLINE Result V8UnpackValue(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
-    return V8ConvertImpl<T, TypeTraits<T>::kTraitId>::Unpack(ctx, in, out);
+  NJS_INLINE Result v8UnpackValue(Context& ctx, const v8::Local<v8::Value>& in, T& out) NJS_NOEXCEPT {
+    return V8ConvertImpl<T, TypeTraits<T>::kTraitId>::unpack(ctx, in, out);
   }
   // Handle to handle (no conversion).
   template<>
-  NJS_INLINE Result V8UnpackValue(Context& ctx, const v8::Local<v8::Value>& in, Value& out) NJS_NOEXCEPT {
-    V8HandleOfValue(out) = in;
+  NJS_INLINE Result v8UnpackValue(Context& ctx, const v8::Local<v8::Value>& in, Value& out) NJS_NOEXCEPT {
+    v8HandleOfValue(out) = in;
     return kResultOk;
   }
   // Handle to handle (no conversion).
   template<>
-  NJS_INLINE Result V8UnpackValue(Context& ctx, const v8::Local<v8::Value>& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
+  NJS_INLINE Result v8UnpackValue(Context& ctx, const v8::Local<v8::Value>& in, v8::Local<v8::Value>& out) NJS_NOEXCEPT {
     out = in;
     return kResultOk;
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result V8UnpackWithConcept(Context& ctx, const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
-    return V8ConvertWithConceptImpl<T, Concept, Concept::kConceptType>::Unpack(ctx, in, out, concept);
+  NJS_INLINE Result v8UnpackWithConcept(Context& ctx, const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
+    return V8ConvertWithConceptImpl<T, Concept, Concept::kConceptType>::unpack(ctx, in, out, concept);
   }
 
   template<typename T>
   struct V8ReturnImpl {
-    static NJS_INLINE Result Set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value) NJS_NOEXCEPT {
+    static NJS_INLINE Result set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value) NJS_NOEXCEPT {
       v8::Local<v8::Value> intermediate;
-      NJS_CHECK(V8ConvertImpl<T, TypeTraits<T>::kTraitId>::Pack(ctx, value, intermediate));
+      NJS_CHECK(V8ConvertImpl<T, TypeTraits<T>::kTraitId>::pack(ctx, value, intermediate));
 
       rv.Set(intermediate);
       return kResultOk;
@@ -365,7 +338,7 @@ namespace internal {
 
   template<>
   struct V8ReturnImpl< v8::Local<v8::Value> > {
-    static NJS_INLINE Result Set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const v8::Local<v8::Value>& value) NJS_NOEXCEPT {
+    static NJS_INLINE Result set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const v8::Local<v8::Value>& value) NJS_NOEXCEPT {
       rv.Set(value);
       return kResultOk;
     }
@@ -373,15 +346,15 @@ namespace internal {
 
   template<>
   struct V8ReturnImpl<Value> {
-    static NJS_INLINE Result Set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const Value& value) NJS_NOEXCEPT {
-      rv.Set(V8HandleOfValue(value));
+    static NJS_INLINE Result set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const Value& value) NJS_NOEXCEPT {
+      rv.Set(v8HandleOfValue(value));
       return kResultOk;
     }
   };
 
   template<>
   struct V8ReturnImpl<NullType> {
-    static NJS_INLINE Result Set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const NullType&) NJS_NOEXCEPT {
+    static NJS_INLINE Result set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const NullType&) NJS_NOEXCEPT {
       rv.SetNull();
       return kResultOk;
     }
@@ -389,7 +362,7 @@ namespace internal {
 
   template<>
   struct V8ReturnImpl<UndefinedType> {
-    static NJS_INLINE Result Set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const UndefinedType&) NJS_NOEXCEPT {
+    static NJS_INLINE Result set(Context& ctx, v8::ReturnValue<v8::Value>& rv, const UndefinedType&) NJS_NOEXCEPT {
       rv.SetUndefined();
       return kResultOk;
     }
@@ -397,27 +370,27 @@ namespace internal {
 
   template<typename T>
   NJS_INLINE Result V8SetReturn(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value) NJS_NOEXCEPT {
-    return V8ReturnImpl<T>::Set(ctx, rv, value);
+    return V8ReturnImpl<T>::set(ctx, rv, value);
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result V8SetReturnWithConcept(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value, const Concept& concept) NJS_NOEXCEPT {
+  NJS_INLINE Result v8SetReturnWithConcept(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value, const Concept& concept) NJS_NOEXCEPT {
     Value intermediate;
-    NJS_CHECK(V8ConvertWithConceptImpl<T, Concept, Concept::kConceptType>::Pack(ctx, value, intermediate, concept));
+    NJS_CHECK(V8ConvertWithConceptImpl<T, Concept, Concept::kConceptType>::pack(ctx, value, intermediate, concept));
 
-    rv.Set(V8HandleOfValue(intermediate));
+    rv.Set(v8HandleOfValue(intermediate));
     return kResultOk;
   }
 
   template<typename T>
-  NJS_INLINE void V8WrapNative(Context& ctx, v8::Local<v8::Object> obj, T* self) NJS_NOEXCEPT;
+  NJS_INLINE void v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, T* self) NJS_NOEXCEPT;
 
   template<typename T>
-  NJS_INLINE T* V8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT;
+  NJS_INLINE T* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT;
 
   // Propagates `result` and its `payload` into the underlying VM.
-  static NJS_NOINLINE void V8ReportError(Context& ctx, Result result, const internal::ResultPayload& payload) NJS_NOEXCEPT;
-} // internal namespace
+  static NJS_NOINLINE void v8ReportError(Context& ctx, Result result, const ResultPayload& payload) NJS_NOEXCEPT;
+} // Internal namespace
 
 // ============================================================================
 // [njs::Runtime]
@@ -425,22 +398,15 @@ namespace internal {
 
 class Runtime {
 public:
-  NJS_INLINE Runtime() NJS_NOEXCEPT
-    : _isolate(NULL) {}
-
-  NJS_INLINE Runtime(const Runtime& other) NJS_NOEXCEPT
-    : _isolate(other._isolate) {}
-
-  explicit NJS_INLINE Runtime(v8::Isolate* isolate) NJS_NOEXCEPT
-    : _isolate(isolate) {}
+  NJS_INLINE Runtime() NJS_NOEXCEPT : _isolate(NULL) {}
+  NJS_INLINE Runtime(const Runtime& other) NJS_NOEXCEPT : _isolate(other._isolate) {}
+  explicit NJS_INLINE Runtime(v8::Isolate* isolate) NJS_NOEXCEPT : _isolate(isolate) {}
 
   // --------------------------------------------------------------------------
   // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE v8::Isolate* GetV8Isolate() const NJS_NOEXCEPT {
-    return _isolate;
-  }
+  NJS_INLINE v8::Isolate* v8GetIsolate() const NJS_NOEXCEPT { return _isolate; }
 
   // --------------------------------------------------------------------------
   // [Members]
@@ -457,14 +423,11 @@ class Value {
 public:
   typedef v8::Local<v8::Value> HandleType;
 
-  NJS_INLINE Value() NJS_NOEXCEPT
-    : _handle() {}
-  NJS_INLINE Value(const Value& other) NJS_NOEXCEPT
-    : _handle(other._handle) {}
+  NJS_INLINE Value() NJS_NOEXCEPT : _handle() {}
+  NJS_INLINE Value(const Value& other) NJS_NOEXCEPT : _handle(other._handle) {}
 
   template<typename T>
-  explicit NJS_INLINE Value(const v8::Local<T>& handle) NJS_NOEXCEPT
-    : _handle(handle) {}
+  explicit NJS_INLINE Value(const v8::Local<T>& handle) NJS_NOEXCEPT : _handle(handle) {}
 
   // --------------------------------------------------------------------------
   // [Assignment]
@@ -486,18 +449,14 @@ public:
   // --------------------------------------------------------------------------
 
   // Get the V8's handle.
-  NJS_INLINE HandleType& GetV8Handle() NJS_NOEXCEPT { return _handle; }
-  NJS_INLINE const HandleType& GetV8Handle() const NJS_NOEXCEPT { return _handle; }
+  NJS_INLINE HandleType& v8GetHandle() NJS_NOEXCEPT { return _handle; }
+  NJS_INLINE const HandleType& v8GetHandle() const NJS_NOEXCEPT { return _handle; }
 
   template<typename T>
-  NJS_INLINE v8::Local<T> GetV8HandleAs() const NJS_NOEXCEPT {
-    return v8::Local<T>::Cast(_handle);
-  }
+  NJS_INLINE v8::Local<T> v8GetHandleAs() const NJS_NOEXCEPT { return v8::Local<T>::Cast(_handle); }
 
   template<typename T = v8::Value>
-  NJS_INLINE T* GetV8Value() const NJS_NOEXCEPT {
-    return T::Cast(*_handle);
-  }
+  NJS_INLINE T* v8GetValue() const NJS_NOEXCEPT { return T::Cast(*_handle); }
 
   // --------------------------------------------------------------------------
   // [Handle]
@@ -506,164 +465,164 @@ public:
   // Get whether the handle is valid and can be used. If the handle is invalid
   // then no member function can be called on it. There are asserts that check
   // this in debug mode.
-  NJS_INLINE bool IsValid() const NJS_NOEXCEPT { return !_handle.IsEmpty(); }
+  NJS_INLINE bool isValid() const NJS_NOEXCEPT { return !_handle.IsEmpty(); }
 
   // Reset the handle.
   //
-  // NOTE: `IsValid()` will return `false` after `Reset()` is called.
-  NJS_INLINE void Reset() NJS_NOEXCEPT { _handle.Clear(); }
+  // NOTE: `isValid()` will return `false` after `reset()` is called.
+  NJS_INLINE void reset() NJS_NOEXCEPT { _handle.Clear(); }
 
   // --------------------------------------------------------------------------
   // [Type System]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE bool IsUndefined() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isUndefined() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsUndefined();
   }
 
-  NJS_INLINE bool IsNull() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isNull() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsNull();
   }
 
-  NJS_INLINE bool IsBool() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isBool() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsBoolean();
   }
 
-  NJS_INLINE bool IsTrue() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isTrue() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsTrue();
   }
 
-  NJS_INLINE bool IsFalse() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isFalse() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsFalse();
   }
 
-  NJS_INLINE bool IsInt32() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isInt32() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsInt32();
   }
 
-  NJS_INLINE bool IsUint32() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isUint32() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsUint32();
   }
 
-  NJS_INLINE bool IsNumber() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isNumber() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsNumber();
   }
 
-  NJS_INLINE bool IsString() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isString() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsString();
   }
 
-  NJS_INLINE bool IsSymbol() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isSymbol() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsSymbol();
   }
 
-  NJS_INLINE bool IsArray() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isArray() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsArray();
   }
 
-  NJS_INLINE bool IsObject() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isObject() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsObject();
   }
 
-  NJS_INLINE bool IsDate() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isDate() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsDate();
   }
 
-  NJS_INLINE bool IsRegExp() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isRegExp() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsRegExp();
   }
 
-  NJS_INLINE bool IsFunction() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isFunction() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsFunction();
   }
 
-  NJS_INLINE bool IsExternal() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isExternal() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsExternal();
   }
 
-  NJS_INLINE bool IsPromise() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isPromise() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsPromise();
   }
 
-  NJS_INLINE bool IsArrayBuffer() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isArrayBuffer() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsArrayBuffer();
   }
 
-  NJS_INLINE bool IsArrayBufferView() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isArrayBufferView() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsArrayBufferView();
   }
 
-  NJS_INLINE bool IsDataView() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isDataView() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsDataView();
   }
 
-  NJS_INLINE bool IsTypedArray() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isTypedArray() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsTypedArray();
   }
 
-  NJS_INLINE bool IsInt8Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isInt8Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsInt8Array();
   }
 
-  NJS_INLINE bool IsInt16Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isInt16Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsInt16Array();
   }
 
-  NJS_INLINE bool IsInt32Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isInt32Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsInt32Array();
   }
 
-  NJS_INLINE bool IsUint8Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isUint8Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsUint8Array();
   }
 
-  NJS_INLINE bool IsUint8ClampedArray() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isUint8ClampedArray() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsUint8ClampedArray();
   }
 
-  NJS_INLINE bool IsUint16Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isUint16Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsUint16Array();
   }
 
-  NJS_INLINE bool IsUint32Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isUint32Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsUint32Array();
   }
 
-  NJS_INLINE bool IsFloat32Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isFloat32Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsFloat32Array();
   }
 
-  NJS_INLINE bool IsFloat64Array() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
+  NJS_INLINE bool isFloat64Array() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
     return _handle->IsFloat64Array();
   }
 
@@ -675,78 +634,78 @@ public:
   // casting improper type will fail in debug more and cause an apocalypse in
   // release.
 
-  NJS_INLINE bool BoolValue() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsBool());
-    return GetV8Value<v8::Boolean>()->BooleanValue();
+  NJS_INLINE bool boolValue() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isBool());
+    return v8GetValue<v8::Boolean>()->BooleanValue();
   }
 
-  NJS_INLINE int32_t Int32Value() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsInt32());
-    return GetV8Value<v8::Int32>()->Value();
+  NJS_INLINE int32_t int32Value() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isInt32());
+    return v8GetValue<v8::Int32>()->Value();
   }
 
-  NJS_INLINE uint32_t Uint32Value() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsUint32());
-    return GetV8Value<v8::Uint32>()->Value();
+  NJS_INLINE uint32_t uint32Value() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isUint32());
+    return v8GetValue<v8::Uint32>()->Value();
   }
 
-  NJS_INLINE double DoubleValue() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsNumber());
-    return GetV8Value<v8::Number>()->Value();
+  NJS_INLINE double doubleValue() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isNumber());
+    return v8GetValue<v8::Number>()->Value();
   }
 
   // --------------------------------------------------------------------------
   // [String-Specific Functionality]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE bool IsLatin1() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->ContainsOnlyOneByte();
+  NJS_INLINE bool isLatin1() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->ContainsOnlyOneByte();
   }
 
-  NJS_INLINE bool IsLatin1Guess() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->IsOneByte();
+  NJS_INLINE bool isLatin1Guess() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->IsOneByte();
   }
 
   // Length of the string if represented as UTF-16 or LATIN-1 (if representable).
-  NJS_INLINE size_t StringLength() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->Length();
+  NJS_INLINE size_t getStringLength() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->Length();
   }
 
   // Length of the string if represented as UTF-8.
-  NJS_INLINE size_t StringUtf8Length() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->Utf8Length();
+  NJS_INLINE size_t getUtf8Length() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->Utf8Length();
   }
 
-  NJS_INLINE int ReadLatin1(char* out, int len = -1) const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->WriteOneByte(
+  NJS_INLINE int readLatin1(char* out, int len = -1) const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->WriteOneByte(
       reinterpret_cast<uint8_t*>(out), 0, len, v8::String::NO_NULL_TERMINATION);
   }
 
-  NJS_INLINE int ReadUtf8(char* out, int len = -1) const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->WriteUtf8(
+  NJS_INLINE int readUtf8(char* out, int len = -1) const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->WriteUtf8(
       out, len, NULL, v8::String::NO_NULL_TERMINATION);
   }
 
-  NJS_INLINE int ReadUtf16(uint16_t* out, int len = -1) const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsString());
-    return GetV8Value<v8::String>()->Write(
+  NJS_INLINE int readUtf16(uint16_t* out, int len = -1) const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isString());
+    return v8GetValue<v8::String>()->Write(
       out, 0, len, v8::String::NO_NULL_TERMINATION);
   }
 
@@ -754,10 +713,10 @@ public:
   // [Array Functionality]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE size_t ArrayLength() const NJS_NOEXCEPT {
-    NJS_ASSERT(IsValid());
-    NJS_ASSERT(IsArray());
-    return GetV8Value<v8::Array>()->Length();
+  NJS_INLINE size_t getArrayLength() const NJS_NOEXCEPT {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isArray());
+    return v8GetValue<v8::Array>()->Length();
   }
   // --------------------------------------------------------------------------
   // [Members]
@@ -766,22 +725,17 @@ public:
   HandleType _handle;
 };
 
-namespace internal {
-  static NJS_INLINE v8::Local<v8::Value>& V8HandleOfValue(Value& value) NJS_NOEXCEPT {
-    return value._handle;
-  }
-
-  static NJS_INLINE const v8::Local<v8::Value>& V8HandleOfValue(const Value& value) NJS_NOEXCEPT {
-    return value._handle;
-  }
-} // internal namsepace
+namespace Internal {
+  static NJS_INLINE v8::Local<v8::Value>& v8HandleOfValue(Value& value) NJS_NOEXCEPT { return value._handle; }
+  static NJS_INLINE const v8::Local<v8::Value>& v8HandleOfValue(const Value& value) NJS_NOEXCEPT { return value._handle; }
+} // Internal namsepace
 
 // ============================================================================
 // [njs::Persistent]
 // ============================================================================
 
 class Persistent {
- public:
+public:
   NJS_INLINE Persistent() NJS_NOEXCEPT
     : _handle() {}
 
@@ -790,27 +744,27 @@ class Persistent {
   // --------------------------------------------------------------------------
 
   // Get the V8's handle.
-  NJS_INLINE v8::Persistent<v8::Value>& GetV8Handle() NJS_NOEXCEPT {
+  NJS_INLINE v8::Persistent<v8::Value>& v8GetHandle() NJS_NOEXCEPT {
     return _handle;
   }
 
-  NJS_INLINE const v8::Persistent<v8::Value>& GetV8Handle() const NJS_NOEXCEPT {
+  NJS_INLINE const v8::Persistent<v8::Value>& v8GetHandle() const NJS_NOEXCEPT {
     return _handle;
   }
 
   // Get the V8's `Persistent<T>` handle.
   template<typename T>
-  NJS_INLINE v8::Persistent<T>& GetV8HandleAs() NJS_NOEXCEPT {
+  NJS_INLINE v8::Persistent<T>& v8GetHandleAs() NJS_NOEXCEPT {
     return reinterpret_cast<v8::Persistent<T>&>(_handle);
   }
 
   template<typename T>
-  NJS_INLINE const v8::Persistent<T>& GetV8HandleAs() const NJS_NOEXCEPT {
+  NJS_INLINE const v8::Persistent<T>& v8GetHandleAs() const NJS_NOEXCEPT {
     return reinterpret_cast<const v8::Persistent<T>&>(_handle);
   }
 
   template<typename T = v8::Value>
-  NJS_INLINE T* GetV8Value() const NJS_NOEXCEPT {
+  NJS_INLINE T* v8GetValue() const NJS_NOEXCEPT {
     return T::Cast(*_handle);
   }
 
@@ -821,36 +775,12 @@ class Persistent {
   // Get whether the handle is valid and can be used. If the handle is invalid
   // then no member function can be called on it. There are asserts that check
   // this in debug mode.
-  NJS_INLINE bool IsValid() const NJS_NOEXCEPT {
-    return !_handle.IsEmpty();
-  }
+  NJS_INLINE bool isValid() const NJS_NOEXCEPT { return !_handle.IsEmpty(); }
 
   // Reset the handle to its construction state.
   //
-  // NOTE: `IsValid()` returns return `false` after `Reset()` call.
-  NJS_INLINE void Reset() NJS_NOEXCEPT {
-    _handle.Empty();
-  }
-
-  // --------------------------------------------------------------------------
-  // [Cast]
-  // --------------------------------------------------------------------------
-
-  // TODO: DEPRECATED?
-
-  // Cast to `T`.
-  //
-  // NOTE: No checking is performed at this stage, you need to check whether
-  // the value can be casted to `T` before you call `Cast()`.
-  template<typename T>
-  NJS_INLINE T& Cast() NJS_NOEXCEPT {
-    return *static_cast<T*>(this);
-  }
-
-  template<typename T>
-  NJS_INLINE const T& Cast() const NJS_NOEXCEPT {
-    return *static_cast<const T*>(this);
-  }
+  // NOTE: `isValid()` returns return `false` after `reset()` is called.
+  NJS_INLINE void reset() NJS_NOEXCEPT { _handle.Empty(); }
 
   // --------------------------------------------------------------------------
   // [Members]
@@ -867,7 +797,7 @@ class Context {
   // No assignment.
   NJS_INLINE Context& operator=(const Context& other) NJS_NOEXCEPT;
 
- public:
+public:
   NJS_INLINE Context() NJS_NOEXCEPT {}
 
   NJS_INLINE Context(const Context& other) NJS_NOEXCEPT
@@ -876,105 +806,63 @@ class Context {
 
   explicit NJS_INLINE Context(const Runtime& runtime) NJS_NOEXCEPT
     : _runtime(runtime),
-      _context(runtime.GetV8Isolate()->GetCurrentContext()) {}
+      _context(runtime.v8GetIsolate()->GetCurrentContext()) {}
 
   NJS_INLINE Context(v8::Isolate* isolate, const v8::Local<v8::Context>& context) NJS_NOEXCEPT
     : _runtime(isolate),
       _context(context) {}
 
-  NJS_INLINE ~Context() NJS_NOEXCEPT {}
-
   // --------------------------------------------------------------------------
   // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE v8::Local<v8::Context>& GetV8Context() NJS_NOEXCEPT {
-    return _context;
-  }
-
-  NJS_INLINE const v8::Local<v8::Context>& GetV8Context() const NJS_NOEXCEPT {
-    return _context;
-  }
-
-  NJS_INLINE v8::Isolate* GetV8Isolate() const NJS_NOEXCEPT {
-    return _runtime._isolate;
-  }
+  NJS_INLINE v8::Isolate* v8GetIsolate() const NJS_NOEXCEPT { return _runtime._isolate; }
+  NJS_INLINE v8::Local<v8::Context>& v8GetContext() NJS_NOEXCEPT { return _context; }
+  NJS_INLINE const v8::Local<v8::Context>& v8GetContext() const NJS_NOEXCEPT { return _context; }
 
   // --------------------------------------------------------------------------
   // [Runtime]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE const Runtime& GetRuntime() const NJS_NOEXCEPT {
-    return _runtime;
-  }
+  NJS_INLINE const Runtime& getRuntime() const NJS_NOEXCEPT { return _runtime; }
 
   // --------------------------------------------------------------------------
   // [Built-Ins]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE Value Undefined() const NJS_NOEXCEPT {
-    return Value(v8::Undefined(GetV8Isolate()));
-  }
-
-  NJS_INLINE Value Null() const NJS_NOEXCEPT {
-    return Value(v8::Null(GetV8Isolate()));
-  }
-
-  NJS_INLINE Value True() const NJS_NOEXCEPT {
-    return Value(v8::True(GetV8Isolate()));
-  }
-
-  NJS_INLINE Value False() const NJS_NOEXCEPT {
-    return Value(v8::False(GetV8Isolate()));
-  }
-
-  NJS_INLINE Value EmptyString() const NJS_NOEXCEPT {
-    return Value(v8::String::Empty(GetV8Isolate()));
-  }
+  NJS_INLINE Value undefined() const NJS_NOEXCEPT { return Value(v8::Undefined(v8GetIsolate())); }
+  NJS_INLINE Value null() const NJS_NOEXCEPT { return Value(v8::Null(v8GetIsolate())); }
+  NJS_INLINE Value true_() const NJS_NOEXCEPT { return Value(v8::True(v8GetIsolate())); }
+  NJS_INLINE Value false_() const NJS_NOEXCEPT { return Value(v8::False(v8GetIsolate())); }
 
   // --------------------------------------------------------------------------
   // [New]
   // --------------------------------------------------------------------------
 
+  NJS_INLINE Value newBool(bool value) NJS_NOEXCEPT { return Value(v8::Boolean::New(v8GetIsolate(), value)); }
+  NJS_INLINE Value newInt32(int32_t value) NJS_NOEXCEPT { return Value(v8::Integer::New(v8GetIsolate(), value)); }
+  NJS_INLINE Value newUint32(uint32_t value) NJS_NOEXCEPT { return Value(v8::Integer::New(v8GetIsolate(), value)); }
+  NJS_INLINE Value newDouble(double value) NJS_NOEXCEPT { return Value(v8::Number::New(v8GetIsolate(), value)); }
+  NJS_INLINE Value newArray() NJS_NOEXCEPT { return Value(v8::Array::New(v8GetIsolate())); }
+  NJS_INLINE Value newObject() NJS_NOEXCEPT { return Value(v8::Object::New(v8GetIsolate())); }
+
+  template<typename StrRefT>
+  NJS_INLINE Value newString(const StrRefT& data) NJS_NOEXCEPT {
+    return Value(Internal::v8NewString<StrRefT>(*this, data, v8::NewStringType::kNormal));
+  }
+
+  template<typename StrRefT>
+  NJS_INLINE Value newInternalizedString(const StrRefT& data) NJS_NOEXCEPT {
+    return Value(Internal::v8NewString<StrRefT>(*this, data, v8::NewStringType::kInternalized));
+  }
+
+  NJS_INLINE Value newEmptyString() const NJS_NOEXCEPT { return Value(v8::String::Empty(v8GetIsolate())); }
+
   template<typename T>
-  NJS_INLINE Value NewValue(const T& value) NJS_NOEXCEPT {
+  NJS_INLINE Value newValue(const T& value) NJS_NOEXCEPT {
     Value result;
-    internal::V8ConvertImpl<T, internal::TypeTraits<T>::kTraitId>::Pack(*this, value, result._handle);
+    Internal::V8ConvertImpl<T, Internal::TypeTraits<T>::kTraitId>::pack(*this, value, result._handle);
     return result;
-  }
-
-  NJS_INLINE Value NewBool(bool value) NJS_NOEXCEPT {
-    return Value(v8::Boolean::New(GetV8Isolate(), value));
-  }
-
-  NJS_INLINE Value NewInt32(int32_t value) NJS_NOEXCEPT {
-    return Value(v8::Integer::New(GetV8Isolate(), value));
-  }
-
-  NJS_INLINE Value NewUint32(uint32_t value) NJS_NOEXCEPT {
-    return Value(v8::Integer::New(GetV8Isolate(), value));
-  }
-
-  NJS_INLINE Value NewDouble(double value) NJS_NOEXCEPT {
-    return Value(v8::Number::New(GetV8Isolate(), value));
-  }
-
-  template<typename StrRef>
-  NJS_INLINE Value NewString(const StrRef& data) NJS_NOEXCEPT {
-    return Value(internal::V8NewString<StrRef>(*this, data, v8::NewStringType::kNormal));
-  }
-
-  template<typename StrRef>
-  NJS_INLINE Value NewInternalizedString(const StrRef& data) NJS_NOEXCEPT {
-    return Value(internal::V8NewString<StrRef>(*this, data, v8::NewStringType::kInternalized));
-  }
-
-  NJS_INLINE Value NewObject() NJS_NOEXCEPT {
-    return Value(v8::Object::New(GetV8Isolate()));
-  }
-
-  NJS_INLINE Value NewArray() NJS_NOEXCEPT {
-    return Value(v8::Array::New(GetV8Isolate()));
   }
 
   // --------------------------------------------------------------------------
@@ -986,13 +874,13 @@ class Context {
   // JS doesn't differentiate between integer and floating point types.
 
   template<typename T>
-  NJS_INLINE Result Unpack(const Value& in, T& out) NJS_NOEXCEPT {
-    return internal::V8UnpackValue<T>(*this, in._handle, out);
+  NJS_INLINE Result unpack(const Value& in, T& out) NJS_NOEXCEPT {
+    return Internal::v8UnpackValue<T>(*this, in._handle, out);
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result Unpack(const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
-    return internal::V8UnpackWithConcept<T, Concept>(*this, in, out, concept);
+  NJS_INLINE Result unpack(const Value& in, T& out, const Concept& concept) NJS_NOEXCEPT {
+    return Internal::v8UnpackWithConcept<T, Concept>(*this, in, out, concept);
   }
 
   // --------------------------------------------------------------------------
@@ -1000,175 +888,175 @@ class Context {
   // --------------------------------------------------------------------------
 
   template<typename T>
-  NJS_INLINE void Wrap(Value obj, T* self) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsObject());
-    internal::V8WrapNative<T>(*this, obj.GetV8HandleAs<v8::Object>(), self);
+  NJS_INLINE void wrap(Value obj, T* self) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isObject());
+    Internal::v8WrapNative<T>(*this, obj.v8GetHandleAs<v8::Object>(), self);
   }
 
   template<typename T>
-  NJS_INLINE T* Unwrap(Value obj) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
-    return internal::V8UnwrapNative<T>(*this, obj.GetV8HandleAs<v8::Object>());
+  NJS_INLINE T* unwrap(Value obj) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
+    return Internal::v8UnwrapNative<T>(*this, obj.v8GetHandleAs<v8::Object>());
   }
 
   // --------------------------------------------------------------------------
   // [JS Features]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE Maybe<bool> Equals(const Value& aAny, const Value& bAny) NJS_NOEXCEPT {
-    NJS_ASSERT(aAny.IsValid());
-    NJS_ASSERT(bAny.IsValid());
+  NJS_INLINE Maybe<bool> equals(const Value& aAny, const Value& bAny) NJS_NOEXCEPT {
+    NJS_ASSERT(aAny.isValid());
+    NJS_ASSERT(bAny.isValid());
 
     v8::Maybe<bool> result = aAny._handle->Equals(_context, bAny._handle);
     return Maybe<bool>(result.IsJust() ? kResultOk : kResultBypass, result.FromMaybe(false));
   }
 
-  NJS_INLINE bool SameValue(const Value& aAny, const Value& bAny) const NJS_NOEXCEPT {
-    NJS_ASSERT(aAny.IsValid());
-    NJS_ASSERT(bAny.IsValid());
-    return aAny._handle->SameValue(bAny._handle);
-  }
-
-  NJS_INLINE bool StrictEquals(const Value& aAny, const Value& bAny) const NJS_NOEXCEPT {
-    NJS_ASSERT(aAny.IsValid());
-    NJS_ASSERT(bAny.IsValid());
+  NJS_INLINE bool strictEquals(const Value& aAny, const Value& bAny) const NJS_NOEXCEPT {
+    NJS_ASSERT(aAny.isValid());
+    NJS_ASSERT(bAny.isValid());
     return aAny._handle->StrictEquals(bAny._handle);
   }
 
+  NJS_INLINE bool isSameValue(const Value& aAny, const Value& bAny) const NJS_NOEXCEPT {
+    NJS_ASSERT(aAny.isValid());
+    NJS_ASSERT(bAny.isValid());
+    return aAny._handle->SameValue(bAny._handle);
+  }
+
   // Concatenate two strings.
-  NJS_INLINE Value StringConcat(const Value& aStr, const Value& bStr) NJS_NOEXCEPT {
-    NJS_ASSERT(aStr.IsValid());
-    NJS_ASSERT(aStr.IsString());
-    NJS_ASSERT(bStr.IsValid());
-    NJS_ASSERT(bStr.IsString());
+  NJS_INLINE Value concatStrings(const Value& aStr, const Value& bStr) NJS_NOEXCEPT {
+    NJS_ASSERT(aStr.isValid());
+    NJS_ASSERT(aStr.isString());
+    NJS_ASSERT(bStr.isValid());
+    NJS_ASSERT(bStr.isString());
 
     return Value(
       v8::String::Concat(
-        aStr.GetV8HandleAs<v8::String>(),
-        bStr.GetV8HandleAs<v8::String>()));
+        aStr.v8GetHandleAs<v8::String>(),
+        bStr.v8GetHandleAs<v8::String>()));
   }
 
-  NJS_INLINE Maybe<bool> HasProperty(const Value& obj, const Value& key) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
-    NJS_ASSERT(key.IsValid());
+  NJS_INLINE Maybe<bool> hasProperty(const Value& obj, const Value& key) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
+    NJS_ASSERT(key.isValid());
 
-    v8::Maybe<bool> result = obj.GetV8Value<v8::Object>()->Has(_context, key._handle);
+    v8::Maybe<bool> result = obj.v8GetValue<v8::Object>()->Has(_context, key._handle);
     return Maybe<bool>(result.IsJust() ? kResultOk : kResultBypass, result.FromMaybe(false));
   }
 
-  NJS_INLINE Maybe<bool> HasPropertyAt(const Value& obj, uint32_t index) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
+  NJS_INLINE Maybe<bool> hasPropertyAt(const Value& obj, uint32_t index) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
 
-    v8::Maybe<bool> result = obj.GetV8Value<v8::Object>()->Has(_context, index);
+    v8::Maybe<bool> result = obj.v8GetValue<v8::Object>()->Has(_context, index);
     return Maybe<bool>(result.IsJust() ? kResultOk : kResultBypass, result.FromMaybe(false));
   }
 
-  NJS_INLINE Value GetProperty(const Value& obj, const Value& key) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
-    NJS_ASSERT(key.IsValid());
+  NJS_INLINE Value getProperty(const Value& obj, const Value& key) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
+    NJS_ASSERT(key.isValid());
 
     return Value(
-      internal::V8LocalFromMaybe(
-        obj.GetV8Value<v8::Object>()->Get(_context, key._handle)));
+      Internal::v8LocalFromMaybe(
+        obj.v8GetValue<v8::Object>()->Get(_context, key._handle)));
   }
 
-  template<typename StrRef>
-  NJS_NOINLINE Value GetProperty(const Value& obj, const StrRef& key) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
+  template<typename StrRefT>
+  NJS_NOINLINE Value getProperty(const Value& obj, const StrRefT& key) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
 
-    njs::Value keyValue = NewString(key);
-    if (!keyValue.IsValid())
+    njs::Value keyValue = newString(key);
+    if (!keyValue.isValid())
       return keyValue;
 
     return Value(
-      internal::V8LocalFromMaybe(
-        obj.GetV8Value<v8::Object>()->Get(_context, keyValue._handle)));
+      Internal::v8LocalFromMaybe(
+        obj.v8GetValue<v8::Object>()->Get(_context, keyValue._handle)));
   }
 
-  NJS_INLINE Value GetPropertyAt(const Value& obj, uint32_t index) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
+  NJS_INLINE Value getPropertyAt(const Value& obj, uint32_t index) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
 
     return Value(
-      internal::V8LocalFromMaybe(
-        obj.GetV8Value<v8::Object>()->Get(_context, index)));
+      Internal::v8LocalFromMaybe(
+        obj.v8GetValue<v8::Object>()->Get(_context, index)));
   }
 
-  NJS_INLINE Result SetProperty(const Value& obj, const Value& key, const Value& val) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
-    NJS_ASSERT(key.IsValid());
-    NJS_ASSERT(val.IsValid());
+  NJS_INLINE Result setProperty(const Value& obj, const Value& key, const Value& val) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
+    NJS_ASSERT(key.isValid());
+    NJS_ASSERT(val.isValid());
 
-    v8::Maybe<bool> result = obj.GetV8Value<v8::Object>()->Set(_context, key._handle, val._handle);
+    v8::Maybe<bool> result = obj.v8GetValue<v8::Object>()->Set(_context, key._handle, val._handle);
     return result.FromMaybe(false) ? kResultOk : kResultBypass;
   }
 
-  NJS_INLINE Result SetPropertyAt(const Value& obj, uint32_t index, const Value& val) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(obj.IsObject());
-    NJS_ASSERT(val.IsValid());
+  NJS_INLINE Result setPropertyAt(const Value& obj, uint32_t index, const Value& val) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(obj.isObject());
+    NJS_ASSERT(val.isValid());
 
-    v8::Maybe<bool> result = obj.GetV8Value<v8::Object>()->Set(_context, index, val._handle);
+    v8::Maybe<bool> result = obj.v8GetValue<v8::Object>()->Set(_context, index, val._handle);
     return result.FromMaybe(false) ? kResultOk : kResultBypass;
   }
 
-  NJS_INLINE Value New(const Value& ctor) NJS_NOEXCEPT {
-    NJS_ASSERT(ctor.IsValid());
-    NJS_ASSERT(ctor.IsFunction());
+  NJS_INLINE Value newInstance(const Value& ctor) NJS_NOEXCEPT {
+    NJS_ASSERT(ctor.isValid());
+    NJS_ASSERT(ctor.isFunction());
 
     return Value(
-      internal::V8LocalFromMaybe(
-        ctor.GetV8Value<v8::Function>()->NewInstance(_context)));
+      Internal::v8LocalFromMaybe(
+        ctor.v8GetValue<v8::Function>()->NewInstance(_context)));
   }
 
   template<typename ...Args>
-  NJS_INLINE Value New(const Value& ctor, Args... args) NJS_NOEXCEPT {
+  NJS_INLINE Value newInstance(const Value& ctor, Args... args) NJS_NOEXCEPT {
     Value argv[] = { args... };
 
     return Value(
-      internal::V8LocalFromMaybe(
-        ctor.GetV8Value<v8::Function>()->NewInstance(
+      Internal::v8LocalFromMaybe(
+        ctor.v8GetValue<v8::Function>()->NewInstance(
           _context,
           static_cast<int>(sizeof(argv) / sizeof(argv[0])),
           reinterpret_cast<v8::Local<v8::Value>*>(argv))));
   }
 
-  NJS_INLINE Value NewArgv(const Value& ctor, size_t argc, const Value* argv) NJS_NOEXCEPT {
-    NJS_ASSERT(ctor.IsValid());
-    NJS_ASSERT(ctor.IsFunction());
+  NJS_INLINE Value newInstanceArgv(const Value& ctor, size_t argc, const Value* argv) NJS_NOEXCEPT {
+    NJS_ASSERT(ctor.isValid());
+    NJS_ASSERT(ctor.isFunction());
 
     return Value(
-      internal::V8LocalFromMaybe(
-        ctor.GetV8Value<v8::Function>()->NewInstance(
+      Internal::v8LocalFromMaybe(
+        ctor.v8GetValue<v8::Function>()->NewInstance(
           _context,
           static_cast<int>(argc),
           const_cast<v8::Local<v8::Value>*>(reinterpret_cast<const v8::Local<v8::Value>*>(argv)))));
   }
 
-  NJS_INLINE Value Call(const Value& function, const Value& recv) NJS_NOEXCEPT {
-    return CallArgv(function, recv, 0, NULL);
+  NJS_INLINE Value call(const Value& function, const Value& recv) NJS_NOEXCEPT {
+    return callArgv(function, recv, 0, NULL);
   }
 
   template<typename ...Args>
-  NJS_INLINE Value Call(const Value& function, const Value& recv, Args... args) NJS_NOEXCEPT {
+  NJS_INLINE Value call(const Value& function, const Value& recv, Args... args) NJS_NOEXCEPT {
     Value argv[] = { args... };
-    return CallArgv(function, recv, sizeof(argv) / sizeof(argv[0]), argv);
+    return callArgv(function, recv, sizeof(argv) / sizeof(argv[0]), argv);
   }
 
-  NJS_INLINE Value CallArgv(const Value& function, const Value& recv, size_t argc, const Value* argv) NJS_NOEXCEPT {
-    NJS_ASSERT(function.IsValid());
-    NJS_ASSERT(function.IsFunction());
-    NJS_ASSERT(recv.IsValid());
+  NJS_INLINE Value callArgv(const Value& function, const Value& recv, size_t argc, const Value* argv) NJS_NOEXCEPT {
+    NJS_ASSERT(function.isValid());
+    NJS_ASSERT(function.isFunction());
+    NJS_ASSERT(recv.isValid());
 
     return Value(
-      internal::V8LocalFromMaybe(
-        function.GetV8Value<v8::Function>()->Call(
+      Internal::v8LocalFromMaybe(
+        function.v8GetValue<v8::Function>()->Call(
           _context, recv._handle,
           static_cast<int>(argc),
           const_cast<v8::Local<v8::Value>*>(reinterpret_cast<const v8::Local<v8::Value>*>(argv)))));
@@ -1178,29 +1066,16 @@ class Context {
   // [Exception]
   // --------------------------------------------------------------------------
 
-  NJS_NOINLINE Value NewException(uint32_t type, Value msg) NJS_NOEXCEPT {
-    NJS_ASSERT(msg.IsString());
-
-    Value exception;
+  NJS_NOINLINE Value newException(uint32_t type, Value msg) NJS_NOEXCEPT {
+    NJS_ASSERT(msg.isString());
     switch (type) {
       default:
-      case kExceptionError:
-        exception = v8::Exception::Error(msg.GetV8HandleAs<v8::String>());
-        break;
-      case kExceptionTypeError:
-        exception = v8::Exception::TypeError(msg.GetV8HandleAs<v8::String>());
-        break;
-      case kExceptionRangeError:
-        exception = v8::Exception::RangeError(msg.GetV8HandleAs<v8::String>());
-        break;
-      case kExceptionSyntaxError:
-        exception = v8::Exception::SyntaxError(msg.GetV8HandleAs<v8::String>());
-        break;
-      case kExceptionReferenceError:
-        exception = v8::Exception::ReferenceError(msg.GetV8HandleAs<v8::String>());
-        break;
+      case kExceptionError         : return Value(v8::Exception::Error(msg.v8GetHandleAs<v8::String>()));
+      case kExceptionTypeError     : return Value(v8::Exception::TypeError(msg.v8GetHandleAs<v8::String>()));
+      case kExceptionRangeError    : return Value(v8::Exception::RangeError(msg.v8GetHandleAs<v8::String>()));
+      case kExceptionSyntaxError   : return Value(v8::Exception::SyntaxError(msg.v8GetHandleAs<v8::String>()));
+      case kExceptionReferenceError: return Value(v8::Exception::ReferenceError(msg.v8GetHandleAs<v8::String>()));
     }
-    return exception;
   }
 
   // --------------------------------------------------------------------------
@@ -1208,27 +1083,27 @@ class Context {
   // --------------------------------------------------------------------------
 
   NJS_INLINE Result Throw(Value exception) NJS_NOEXCEPT {
-    GetV8Isolate()->ThrowException(exception._handle);
+    v8GetIsolate()->ThrowException(exception._handle);
     return kResultBypass;
   }
 
-  NJS_NOINLINE Result ThrowNewException(uint32_t type, Value msg) NJS_NOEXCEPT {
-    NJS_ASSERT(msg.IsString());
-    Value exception = NewException(type, msg);
-    GetV8Isolate()->ThrowException(exception._handle);
+  NJS_NOINLINE Result throwNewException(uint32_t type, Value msg) NJS_NOEXCEPT {
+    NJS_ASSERT(msg.isString());
+    Value exception = newException(type, msg);
+    v8GetIsolate()->ThrowException(exception._handle);
     return kResultBypass;
   }
 
-  NJS_NOINLINE Result ThrowNewException(uint32_t type, const char* fmt, ...) NJS_NOEXCEPT {
+  NJS_NOINLINE Result throwNewException(uint32_t type, const char* fmt, ...) NJS_NOEXCEPT {
     char buffer[kMaxBufferSize];
 
     va_list ap;
     va_start(ap, fmt);
-    unsigned int length = internal::StrVFormat(buffer, kMaxBufferSize, fmt, ap);
+    unsigned int length = StrUtils::vsformat(buffer, kMaxBufferSize, fmt, ap);
     va_end(ap);
 
-    Value exception = NewException(type, NewString(Utf8Ref(buffer, length)));
-    GetV8Isolate()->ThrowException(exception._handle);
+    Value exception = newException(type, newString(Utf8Ref(buffer, length)));
+    v8GetIsolate()->ThrowException(exception._handle);
     return kResultBypass;
   }
 
@@ -1236,12 +1111,12 @@ class Context {
   // [Local <-> Persistent]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE Value MakeLocal(const Persistent& persistent) NJS_NOEXCEPT {
-    return Value(v8::Local<v8::Value>::New(GetV8Isolate(), persistent._handle));
+  NJS_INLINE Value makeLocal(const Persistent& persistent) NJS_NOEXCEPT {
+    return Value(v8::Local<v8::Value>::New(v8GetIsolate(), persistent._handle));
   }
 
-  NJS_INLINE Result MakePersistent(const Value& local, Persistent& persistent) NJS_NOEXCEPT {
-    persistent._handle.Reset(GetV8Isolate(), local._handle);
+  NJS_INLINE Result makePersistent(const Value& local, Persistent& persistent) NJS_NOEXCEPT {
+    persistent._handle.Reset(v8GetIsolate(), local._handle);
     return kResultOk;
   }
 
@@ -1249,14 +1124,14 @@ class Context {
   // [Members]
   // --------------------------------------------------------------------------
 
-  // V8's isolate.
+  //! V8's isolate.
   Runtime _runtime;
-  // V8's context handle.
+  //! V8's context.
   v8::Local<v8::Context> _context;
 };
 
-static NJS_INLINE v8::Isolate* internal::GetV8IsolateOfContext(Context& ctx) NJS_NOEXCEPT {
-  return ctx.GetV8Isolate();
+static NJS_INLINE v8::Isolate* Internal::v8GetIsolateOfContext(Context& ctx) NJS_NOEXCEPT {
+  return ctx.v8GetIsolate();
 }
 
 // ============================================================================
@@ -1264,11 +1139,14 @@ static NJS_INLINE v8::Isolate* internal::GetV8IsolateOfContext(Context& ctx) NJS
 // ============================================================================
 
 class HandleScope {
-  NJS_NO_COPY(HandleScope)
+  NJS_NONCOPYABLE(HandleScope)
 
- public:
+public:
   explicit NJS_INLINE HandleScope(const Context& ctx) NJS_NOEXCEPT
-    : _handleScope(ctx.GetV8Isolate()) {}
+    : _handleScope(ctx.v8GetIsolate()) {}
+
+  explicit NJS_INLINE HandleScope(const Runtime& runtime) NJS_NOEXCEPT
+    : _handleScope(runtime.v8GetIsolate()) {}
 
   explicit NJS_INLINE HandleScope(v8::Isolate* isolate) NJS_NOEXCEPT
     : _handleScope(isolate) {}
@@ -1277,15 +1155,13 @@ class HandleScope {
   // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE v8::HandleScope& GetV8HandleScope() NJS_NOEXCEPT {
-    return _handleScope;
-  }
+  NJS_INLINE v8::HandleScope& v8GetHandleScope() NJS_NOEXCEPT { return _handleScope; }
 
   // --------------------------------------------------------------------------
   // [Members]
   // --------------------------------------------------------------------------
 
-  // V8's handle scope.
+  //! V8's handle scope.
   v8::HandleScope _handleScope;
 };
 
@@ -1293,233 +1169,48 @@ class HandleScope {
 // [njs::ScopedContext]
 // ============================================================================
 
-class ScopedContext : public Context {
-  NJS_NO_COPY(ScopedContext)
+class ScopedContext
+  : public HandleScope,
+    public Context {
+  NJS_NONCOPYABLE(ScopedContext)
 
- public:
+public:
   NJS_INLINE ScopedContext(const Context& other) NJS_NOEXCEPT
-    : _handleScope(other),
+    : HandleScope(other),
       Context(other) {}
 
-  explicit NJS_INLINE ScopedContext(const Runtime& other) NJS_NOEXCEPT
-    : _handleScope(other.GetV8Isolate()),
-      Context(other) {}
+  explicit NJS_INLINE ScopedContext(const Runtime& runtime) NJS_NOEXCEPT
+    : HandleScope(runtime),
+      Context(runtime) {}
 
   NJS_INLINE ScopedContext(v8::Isolate* isolate, const v8::Local<v8::Context>& handle) NJS_NOEXCEPT
-    : _handleScope(isolate),
+    : HandleScope(isolate),
       Context(isolate, handle) {}
-
-  NJS_INLINE ~ScopedContext() NJS_NOEXCEPT {}
-
-  // --------------------------------------------------------------------------
-  // [Members]
-  // --------------------------------------------------------------------------
-
-  HandleScope _handleScope;
 };
-
-// ============================================================================
-// [njs::internal::ResultPayload]
-// ============================================================================
-
-namespace internal {
-  // Result payload.
-  //
-  // This data structure hold `Result` code and extra payload that provides a
-  // basic description of the failure. The purpose is to bring minimal set of
-  // failure information that can help users of native addons understand what
-  // happened. For example a message like "Invalid argument" is not really
-  // informative, especially if the function takes more arguments. However,
-  // message like "Invalid argument #1, Expected Int32" is more helpful.
-  //
-  // To prevent unnecessary runtime overhead, this data structure shouldn't
-  // contain any member that requires initialization (that have constructors).
-  struct ResultPayload {
-    // ------------------------------------------------------------------------
-    // [Reset]
-    // ------------------------------------------------------------------------
-
-    // Has to be called to reset the content of payload. It resets only one
-    // member for efficiency. If this member is set then the payload is valid,
-    // otherwise it's invalid or not set.
-    NJS_INLINE void Reset() NJS_NOEXCEPT {
-      _data = NULL;
-    }
-
-    // ------------------------------------------------------------------------
-    // [Throw Helpers]
-    // ------------------------------------------------------------------------
-
-    NJS_INLINE void setErrorMsg(const char* msg = NULL) NJS_NOEXCEPT {
-      _err.msg = NULL;
-    }
-
-    NJS_NOINLINE void setErrorFmt(const char* fmt, ...) NJS_NOEXCEPT {
-      va_list ap;
-      va_start(ap, fmt);
-      _err.msg = _buffer;
-      // TODO: Set length.
-      unsigned int length = internal::StrVFormat(_buffer, kMaxBufferSize, fmt, ap);
-      va_end(ap);
-    }
-
-    // ------------------------------------------------------------------------
-    // [InvalidArg Helpers]
-    // ------------------------------------------------------------------------
-
-    NJS_INLINE int throwInvalidArgMsg(int argIndex, const char* argName = NULL) NJS_NOEXCEPT {
-      _arg.index = argIndex;
-      _arg.msg = argName;
-      return kResultInvalidArgumentCommon;
-    }
-
-    NJS_NOINLINE int throwInvalidArgFmt(int argIndex, const char* fmt, ...) NJS_NOEXCEPT {
-      va_list ap;
-      va_start(ap, fmt);
-      // TODO: Set length.
-      unsigned int length = internal::StrVFormat(_buffer, kMaxBufferSize, fmt, ap);
-      va_end(ap);
-
-      _arg.index = argIndex;
-      _arg.msg = _buffer;
-      return kResultInvalidArgumentCommon;
-    }
-
-    NJS_INLINE int throwInvalidArgTypeId(int argIndex, const char* argName, int typeId) NJS_NOEXCEPT {
-      _arg.index = argIndex;
-      _arg.msg = argName;
-      _type.id = typeId;
-
-      return kResultInvalidArgumentTypeId;
-    }
-
-    NJS_INLINE int throwInvalidArgTypeName(int argIndex, const char* argName, const char* typeName) NJS_NOEXCEPT {
-      _arg.index = argIndex;
-      _arg.msg = argName;
-      _type.name = typeName;
-
-      return kResultInvalidArgumentTypeName;
-    }
-
-    NJS_INLINE int throwInvalidArgCount(int argsRequired = -1) NJS_NOEXCEPT {
-      _arg.required = argsRequired;
-      return kResultInvalidArgumentCount;
-    }
-
-    // ------------------------------------------------------------------------
-    // [InvalidValue]
-    // ------------------------------------------------------------------------
-
-    NJS_INLINE int throwInvalidValueMsg(const char* msg = NULL) NJS_NOEXCEPT {
-      _val.msg = msg;
-      return kResultInvalidValueCommon;
-    }
-
-    NJS_NOINLINE int throwInvalidValueFmt(const char* fmt, ...) NJS_NOEXCEPT {
-      va_list ap;
-      va_start(ap, fmt);
-      // TODO: Set length.
-      unsigned int length = internal::StrVFormat(_buffer, kMaxBufferSize, fmt, ap);
-      va_end(ap);
-
-      _val.msg = _buffer;
-      return kResultInvalidValueCommon;
-    }
-
-    // --------------------------------------------------------------------------
-    // [Members]
-    // --------------------------------------------------------------------------
-
-    struct ErrParams {
-      const char* msg;
-    };
-
-    struct ArgParams {
-      const char* msg;
-      int index;
-      int required;
-    };
-
-    struct ValParams {
-      const char* msg;
-    };
-
-    const char* _data;
-
-    union {
-      ErrParams _err;
-      ArgParams _arg;
-      ValParams _val;
-    };
-
-    union {
-      int id;
-      const char* name;
-    } _type;
-
-    // Static buffer allocated by the function wrapper (not the implementation).
-    char _buffer[kMaxBufferSize];
-  };
-} // internal namespace
 
 // ============================================================================
 // [njs::ExecutionContext]
 // ============================================================================
 
-class ExecutionContext : public Context {
-  NJS_NO_COPY(ExecutionContext)
+class ExecutionContext
+  : public Context,
+    public ResultMixin {
+  NJS_NONCOPYABLE(ExecutionContext)
 
- public:
-  NJS_INLINE ExecutionContext() NJS_NOEXCEPT
-    : Context() { _payload.Reset(); }
-
-  NJS_INLINE ExecutionContext(const Context& other) NJS_NOEXCEPT
-    : Context(other) { _payload.Reset(); }
-
-  NJS_INLINE ExecutionContext(v8::Isolate* isolate, const v8::Local<v8::Context>& handle) NJS_NOEXCEPT
-    : Context(isolate, handle) { _payload.Reset(); }
-
-  NJS_INLINE ~ExecutionContext() NJS_NOEXCEPT {}
+public:
+  NJS_INLINE ExecutionContext() NJS_NOEXCEPT : Context() {}
+  NJS_INLINE ExecutionContext(const Context& other) NJS_NOEXCEPT : Context(other) {}
+  NJS_INLINE ExecutionContext(v8::Isolate* isolate, const v8::Local<v8::Context>& handle) NJS_NOEXCEPT : Context(isolate, handle) {}
 
   // --------------------------------------------------------------------------
-  // [High-Level]
+  // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE Result InvalidArgument() NJS_NOEXCEPT {
-    return kResultInvalidArgumentCommon;
-  }
-
-  NJS_INLINE Result InvalidArgument(unsigned int index) NJS_NOEXCEPT {
-    return kResultInvalidArgumentCommon;
-  }
-
-  NJS_INLINE Result InvalidArgumentType(unsigned int index) NJS_NOEXCEPT {
-    return kResultInvalidArgumentTypeId;
-  }
-
-  NJS_INLINE Result InvalidArgumentValue(unsigned int index) NJS_NOEXCEPT {
-    return kResultInvalidArgumentValue;
-  }
-
-  NJS_INLINE Result InvalidArgumentsCount() NJS_NOEXCEPT {
-    return kResultInvalidArgumentCount;
-  }
-
-  NJS_INLINE Result InvalidArgumentsCount(unsigned int expected) NJS_NOEXCEPT {
-    return kResultInvalidArgumentCount;
-  }
-
-  // Processes a result returned mostly from a native function.
-  NJS_INLINE void ProcessResult(Result result) NJS_NOEXCEPT {
+  //! Handle a `result` returned from a native function (binding).
+  NJS_INLINE void _handleResult(Result result) NJS_NOEXCEPT {
     if (result != kResultOk)
-      internal::V8ReportError(*this, result, _payload);
+      Internal::v8ReportError(*this, result, _payload);
   }
-
-  // --------------------------------------------------------------------------
-  // [Members]
-  // --------------------------------------------------------------------------
-
-  internal::ResultPayload _payload;
 };
 
 // ============================================================================
@@ -1527,7 +1218,7 @@ class ExecutionContext : public Context {
 // ============================================================================
 
 class FunctionCallContext : public ExecutionContext {
- public:
+public:
   // Creates the FunctionCallContext directly from V8's `FunctionCallbackInfo<Value>`.
   NJS_INLINE FunctionCallContext(const v8::FunctionCallbackInfo<v8::Value>& info) NJS_NOEXCEPT
     : ExecutionContext(info.GetIsolate(), info.GetIsolate()->GetCurrentContext()),
@@ -1537,47 +1228,43 @@ class FunctionCallContext : public ExecutionContext {
   // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE const v8::FunctionCallbackInfo<v8::Value>& GetV8CallbackInfo() const NJS_NOEXCEPT {
+  NJS_INLINE const v8::FunctionCallbackInfo<v8::Value>& v8GetCallbackInfo() const NJS_NOEXCEPT {
     return _info;
   }
+
+  // --------------------------------------------------------------------------
+  // [Accessors]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE Value This() const NJS_NOEXCEPT { return Value(_info.This()); }
+  NJS_INLINE bool isConstructCall() const NJS_NOEXCEPT { return _info.IsConstructCall(); }
 
   // --------------------------------------------------------------------------
   // [Arguments]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE unsigned int ArgumentsCount() const NJS_NOEXCEPT {
+  NJS_INLINE unsigned int getArgumentsLength() const NJS_NOEXCEPT {
     return static_cast<unsigned int>(_info.Length());
   }
 
-  NJS_INLINE Result VerifyArgumentsCount(unsigned int n) NJS_NOEXCEPT {
-    return ArgumentsCount() == n ? static_cast<Result>(kResultOk) : InvalidArgumentsCount(n);
+  NJS_INLINE Result verifyArgumentsLength(unsigned int n) NJS_NOEXCEPT {
+    return getArgumentsLength() != n ? invalidArgumentsLength(n)
+                                     : static_cast<Result>(kResultOk);
   }
 
-  NJS_INLINE Value Argument(unsigned int index) const NJS_NOEXCEPT {
+  NJS_INLINE Value getArgument(unsigned int index) const NJS_NOEXCEPT {
     return Value(_info.operator[](static_cast<int>(index)));
   }
 
-  // Like `Unpack()`, but accepts the argument index instead of the `Value`.
+  // Like `unpack()`, but accepts the argument index instead of the `Value`.
   template<typename T>
-  NJS_INLINE Result UnpackArgument(unsigned int index, T& out) NJS_NOEXCEPT {
-    return internal::V8UnpackValue<T>(*this, _info[static_cast<int>(index)], out);
+  NJS_INLINE Result unpackArgument(unsigned int index, T& out) NJS_NOEXCEPT {
+    return Internal::v8UnpackValue<T>(*this, _info[static_cast<int>(index)], out);
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result UnpackArgument(unsigned int index, T& out, const Concept& concept) NJS_NOEXCEPT {
-    return internal::V8UnpackWithConcept<T, Concept>(*this, Argument(index), out, concept);
-  }
-
-  // --------------------------------------------------------------------------
-  // [Object System]
-  // --------------------------------------------------------------------------
-
-  NJS_INLINE Value This() const NJS_NOEXCEPT {
-    return Value(_info.This());
-  }
-
-  NJS_INLINE bool IsConstructCall() const NJS_NOEXCEPT {
-    return _info.IsConstructCall();
+  NJS_INLINE Result unpackArgument(unsigned int index, T& out, const Concept& concept) NJS_NOEXCEPT {
+    return Internal::v8UnpackWithConcept<T, Concept>(*this, getArgument(index), out, concept);
   }
 
   // --------------------------------------------------------------------------
@@ -1585,15 +1272,15 @@ class FunctionCallContext : public ExecutionContext {
   // --------------------------------------------------------------------------
 
   template<typename T>
-  NJS_INLINE Result Return(const T& value) NJS_NOEXCEPT {
+  NJS_INLINE Result returnValue(const T& value) NJS_NOEXCEPT {
     v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
-    return internal::V8SetReturn<T>(static_cast<Context&>(*this), rv, value);
+    return Internal::V8SetReturn<T>(static_cast<Context&>(*this), rv, value);
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result Return(const T& value, const Concept& concept) NJS_NOEXCEPT {
+  NJS_INLINE Result returnValue(const T& value, const Concept& concept) NJS_NOEXCEPT {
     v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
-    return internal::V8SetReturnWithConcept<T, Concept>(*this, rv, value, concept);
+    return Internal::v8SetReturnWithConcept<T, Concept>(*this, rv, value, concept);
   }
 
   // --------------------------------------------------------------------------
@@ -1608,7 +1295,7 @@ class FunctionCallContext : public ExecutionContext {
 // ============================================================================
 
 class GetPropertyContext : public ExecutionContext {
- public:
+public:
   // Creates the GetPropertyContext directly from V8's `PropertyCallbackInfo<Value>`.
   NJS_INLINE GetPropertyContext(const v8::PropertyCallbackInfo<v8::Value>& info) NJS_NOEXCEPT
     : ExecutionContext(info.GetIsolate(), info.GetIsolate()->GetCurrentContext()),
@@ -1618,32 +1305,28 @@ class GetPropertyContext : public ExecutionContext {
   // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE const v8::PropertyCallbackInfo<v8::Value>& GetV8CallbackInfo() const NJS_NOEXCEPT {
-    return _info;
-  }
+  NJS_INLINE const v8::PropertyCallbackInfo<v8::Value>& v8GetCallbackInfo() const NJS_NOEXCEPT { return _info; }
 
   // --------------------------------------------------------------------------
-  // [Object System]
+  // [Accessors]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE Value This() const NJS_NOEXCEPT {
-    return Value(_info.This());
-  }
+  NJS_INLINE Value This() const NJS_NOEXCEPT { return Value(_info.This()); }
 
   // --------------------------------------------------------------------------
   // [Return]
   // --------------------------------------------------------------------------
 
   template<typename T>
-  NJS_INLINE Result Return(const T& value) NJS_NOEXCEPT {
+  NJS_INLINE Result returnValue(const T& value) NJS_NOEXCEPT {
     v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
-    return internal::V8SetReturn<T>(static_cast<Context&>(*this), rv, value);
+    return Internal::V8SetReturn<T>(static_cast<Context&>(*this), rv, value);
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result Return(const T& value, const Concept& concept) NJS_NOEXCEPT {
+  NJS_INLINE Result returnValue(const T& value, const Concept& concept) NJS_NOEXCEPT {
     v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
-    return internal::V8SetReturnWithConcept<T, Concept>(*this, rv, value, concept);
+    return Internal::v8SetReturnWithConcept<T, Concept>(*this, rv, value, concept);
   }
 
   // --------------------------------------------------------------------------
@@ -1657,7 +1340,7 @@ class GetPropertyContext : public ExecutionContext {
 // ============================================================================
 
 class SetPropertyContext : public ExecutionContext {
- public:
+public:
   // Creates the SetPropertyContext directly from V8's `PropertyCallbackInfo<void>`.
   NJS_INLINE SetPropertyContext(const v8::PropertyCallbackInfo<void>& info,
                                 const v8::Local<v8::Value>& value) NJS_NOEXCEPT
@@ -1669,34 +1352,23 @@ class SetPropertyContext : public ExecutionContext {
   // [V8-Specific]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE const v8::PropertyCallbackInfo<void>& GetV8CallbackInfo() const NJS_NOEXCEPT {
-    return _info;
-  }
+  NJS_INLINE const v8::PropertyCallbackInfo<void>& v8GetCallbackInfo() const NJS_NOEXCEPT { return _info; }
 
   // --------------------------------------------------------------------------
-  // [Object System]
+  // [Accessors]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE Value This() const NJS_NOEXCEPT {
-    return Value(_info.This());
-  }
-
-  // --------------------------------------------------------------------------
-  // [Property]
-  // --------------------------------------------------------------------------
+  NJS_INLINE Value This() const NJS_NOEXCEPT { return Value(_info.This()); }
+  NJS_INLINE Value propertyValue() const NJS_NOEXCEPT { return _propertyValue; }
 
   template<typename T>
-  NJS_INLINE Result UnpackValue(T& out) NJS_NOEXCEPT {
-    return internal::V8UnpackValue<T>(*this, _propertyValue._handle, out);
+  NJS_INLINE Result unpackValue(T& out) NJS_NOEXCEPT {
+    return Internal::v8UnpackValue<T>(*this, _propertyValue._handle, out);
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result UnpackValue(T& out, const Concept& concept) NJS_NOEXCEPT {
-    return internal::V8UnpackWithConcept<T, Concept>(*this, _propertyValue, out, concept);
-  }
-
-  NJS_INLINE Value PropertyValue() const NJS_NOEXCEPT {
-    return _propertyValue;
+  NJS_INLINE Result unpackValue(T& out, const Concept& concept) NJS_NOEXCEPT {
+    return Internal::v8UnpackWithConcept<T, Concept>(*this, _propertyValue, out, concept);
   }
 
   // --------------------------------------------------------------------------
@@ -1708,10 +1380,10 @@ class SetPropertyContext : public ExecutionContext {
 };
 
 // ============================================================================
-// [njs::internal::WrapData]
+// [njs::Internal::WrapData]
 // ============================================================================
 
-namespace internal {
+namespace Internal {
   // A low-level C++ class wrapping functionality.
   //
   // Very similar to `node::ObjectWrap` with few differences:
@@ -1722,22 +1394,22 @@ namespace internal {
   // An instance of `WrapData` should always be named `_njsData` in the class
   // it's used.
   class WrapData {
-   public:
+  public:
     NJS_INLINE WrapData() NJS_NOEXCEPT
       : _refCount(0),
         _object(),
         _destroyCallback(NULL) {}
 
-    NJS_INLINE WrapData(Context& ctx, Value obj, internal::V8WrapDestroyCallback destroyCallback) NJS_NOEXCEPT
+    NJS_INLINE WrapData(Context& ctx, Value obj, Internal::V8WrapDestroyCallback destroyCallback) NJS_NOEXCEPT
       : _refCount(0),
         _destroyCallback(destroyCallback) {
-      NJS_ASSERT(obj.IsObject());
-      _object._handle.Reset(ctx.GetV8Isolate(), obj._handle);
-      obj.GetV8Value<v8::Object>()->SetAlignedPointerInInternalField(0, this);
+      NJS_ASSERT(obj.isObject());
+      _object._handle.Reset(ctx.v8GetIsolate(), obj._handle);
+      obj.v8GetValue<v8::Object>()->SetAlignedPointerInInternalField(0, this);
     }
 
     NJS_NOINLINE ~WrapData() NJS_NOEXCEPT {
-      if (_object.IsValid()) {
+      if (_object.isValid()) {
         NJS_ASSERT(_object._handle.IsNearDeath());
         _object._handle.ClearWeak();
         _object._handle.Reset();
@@ -1748,60 +1420,48 @@ namespace internal {
     // [V8-Specific]
     // ------------------------------------------------------------------------
 
-    NJS_INLINE v8::Persistent<v8::Value>& GetV8Handle() NJS_NOEXCEPT {
-      return _object._handle;
-    }
-
-    NJS_INLINE const v8::Persistent<v8::Value>& GetV8Handle() const NJS_NOEXCEPT {
-      return _object._handle;
-    }
+    NJS_INLINE v8::Persistent<v8::Value>& v8GetHandle() NJS_NOEXCEPT { return _object._handle; }
+    NJS_INLINE const v8::Persistent<v8::Value>& v8GetHandle() const NJS_NOEXCEPT { return _object._handle; }
 
     // ------------------------------------------------------------------------
     // [Handle]
     // ------------------------------------------------------------------------
 
-    NJS_INLINE bool IsValid() const NJS_NOEXCEPT {
-      return _object.IsValid();
-    }
+    NJS_INLINE bool isValid() const NJS_NOEXCEPT { return _object.isValid(); }
 
-    NJS_INLINE Persistent& GetObject() NJS_NOEXCEPT {
-      return _object;
-    }
-
-    NJS_INLINE const Persistent& GetObject() const NJS_NOEXCEPT {
-      return _object;
-    }
+    NJS_INLINE Persistent& getObject() NJS_NOEXCEPT { return _object; }
+    NJS_INLINE const Persistent& getObject() const NJS_NOEXCEPT { return _object; }
 
     // ------------------------------------------------------------------------
     // [RefCount]
     // ------------------------------------------------------------------------
 
-    NJS_INLINE size_t RefCount() const NJS_NOEXCEPT {
+    NJS_INLINE size_t refCount() const NJS_NOEXCEPT {
       return _refCount;
     }
 
-    NJS_INLINE void AddRef() NJS_NOEXCEPT {
-      NJS_ASSERT(IsValid());
+    NJS_INLINE void addRef() NJS_NOEXCEPT {
+      NJS_ASSERT(isValid());
 
       _refCount++;
       _object._handle.ClearWeak();
     }
 
-    NJS_INLINE void Release(void* self) NJS_NOEXCEPT {
+    NJS_INLINE void release(void* self) NJS_NOEXCEPT {
       NJS_ASSERT(_refCount > 0);
-      NJS_ASSERT(IsValid());
-      NJS_ASSERT(!IsWeak());
+      NJS_ASSERT(isValid());
+      NJS_ASSERT(!isWeak());
 
       if (--_refCount == 0)
-        MakeWeak(self);
+        makeWeak(self);
     }
 
-    NJS_INLINE bool IsWeak() const NJS_NOEXCEPT {
+    NJS_INLINE bool isWeak() const NJS_NOEXCEPT {
       return _object._handle.IsWeak();
     }
 
-    NJS_INLINE void MakeWeak(void* self) NJS_NOEXCEPT {
-      NJS_ASSERT(IsValid());
+    NJS_INLINE void makeWeak(void* self) NJS_NOEXCEPT {
+      NJS_ASSERT(isValid());
 
       _object._handle.SetWeak<void>(self, _destroyCallback);
       _object._handle.MarkIndependent();
@@ -1838,33 +1498,33 @@ namespace internal {
     Persistent _object;
 
     // Destroy callback set by calling `wrap()`.
-    internal::V8WrapDestroyCallback _destroyCallback;
+    Internal::V8WrapDestroyCallback _destroyCallback;
   };
-} // internal namespace
+} // Internal namespace
 
 // ============================================================================
-// [njs::internal]
+// [njs::Internal]
 // ============================================================================
 
-namespace internal {
+namespace Internal {
   template<typename T>
-  NJS_INLINE void V8WrapNative(Context& ctx, v8::Local<v8::Object> obj, T* self) NJS_NOEXCEPT {
+  NJS_INLINE void v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, T* self) NJS_NOEXCEPT {
     // Should be never called on an already initialized data.
-    NJS_ASSERT(!self->_njsData._object.IsValid());
+    NJS_ASSERT(!self->_njsData._object.isValid());
     NJS_ASSERT(!self->_njsData._destroyCallback);
 
     // Ensure the object was properly configured and contains internal fields.
     NJS_ASSERT(obj->InternalFieldCount() > 0);
 
-    self->_njsData._object._handle.Reset(ctx.GetV8Isolate(), obj);
-    self->_njsData._destroyCallback =(internal::V8WrapDestroyCallback)(internal::WrapData::destroyCallbackT<T>);
+    self->_njsData._object._handle.Reset(ctx.v8GetIsolate(), obj);
+    self->_njsData._destroyCallback =(Internal::V8WrapDestroyCallback)(Internal::WrapData::destroyCallbackT<T>);
 
     obj->SetAlignedPointerInInternalField(0, self);
-    self->_njsData.MakeWeak(self);
+    self->_njsData.makeWeak(self);
   }
 
   template<typename T>
-  NJS_INLINE T* V8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT {
+  NJS_INLINE T* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT {
     NJS_ASSERT(obj->InternalFieldCount() > 0);
 
     // Cast to `T::Base` before casting to `T`. A direct cast from `void` to
@@ -1873,7 +1533,7 @@ namespace internal {
     return static_cast<T*>(static_cast<typename T::Base*>(self));
   }
 
-  static NJS_NOINLINE Result V8BindClassHelper(
+  static NJS_NOINLINE Result v8BindClassHelper(
     Context& ctx,
     v8::Local<v8::Object> exports,
     v8::Local<v8::FunctionTemplate> classObj,
@@ -1887,14 +1547,14 @@ namespace internal {
     for (unsigned int i = 0; i < count; i++) {
       const BindingItem& item = items[i];
 
-      v8::Local<v8::String> name = internal::V8LocalFromMaybe(
+      v8::Local<v8::String> name = Internal::v8LocalFromMaybe(
         v8::String::NewFromOneByte(
-          ctx.GetV8Isolate(), reinterpret_cast<const uint8_t*>(item.name), v8::NewStringType::kInternalized));
+          ctx.v8GetIsolate(), reinterpret_cast<const uint8_t*>(item.name), v8::NewStringType::kInternalized));
 
       switch (item.type) {
         case BindingItem::kTypeStatic: {
           v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
-            ctx.GetV8Isolate(), (v8::FunctionCallback)item.data, exports);
+            ctx.v8GetIsolate(), (v8::FunctionCallback)item.data, exports);
 
           fnTemplate->SetClassName(name);
           classObj->Set(name, fnTemplate);
@@ -1904,10 +1564,10 @@ namespace internal {
         case BindingItem::kTypeMethod: {
           // Signature is only created when needed and then cached.
           if (methodSignature.IsEmpty())
-            methodSignature = v8::Signature::New(ctx.GetV8Isolate(), classObj);
+            methodSignature = v8::Signature::New(ctx.v8GetIsolate(), classObj);
 
           v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
-            ctx.GetV8Isolate(), (v8::FunctionCallback)item.data, exports, methodSignature);
+            ctx.v8GetIsolate(), (v8::FunctionCallback)item.data, exports, methodSignature);
 
           fnTemplate->SetClassName(name);
           prototype->Set(name, fnTemplate);
@@ -1948,7 +1608,7 @@ namespace internal {
 
           // Signature is only created when needed and then cached.
           if (accessorSignature.IsEmpty())
-            accessorSignature = v8::AccessorSignature::New(ctx.GetV8Isolate(), classObj);
+            accessorSignature = v8::AccessorSignature::New(ctx.v8GetIsolate(), classObj);
 
           if (setter == NULL)
             attr |= v8::ReadOnly;
@@ -1979,120 +1639,123 @@ namespace internal {
       v8::Local<v8::FunctionTemplate> superObj = v8::Local<v8::FunctionTemplate>()) NJS_NOEXCEPT {
 
       v8::Local<v8::FunctionTemplate> classObj = v8::FunctionTemplate::New(
-        ctx.GetV8Isolate(), Type::Bindings::ConstructorEntry);
+        ctx.v8GetIsolate(), Type::Bindings::ConstructorEntry);
 
-      v8::HandleScope (ctx.GetV8Isolate());
+      v8::HandleScope (ctx.v8GetIsolate());
       if (!superObj.IsEmpty())
         classObj->Inherit(superObj);
 
-      Value className = ctx.NewInternalizedString(Latin1Ref(Type::StaticClassName()));
-      classObj->SetClassName(className.GetV8HandleAs<v8::String>());
+      Value className = ctx.newInternalizedString(Latin1Ref(Type::staticClassName()));
+      classObj->SetClassName(className.v8GetHandleAs<v8::String>());
       classObj->InstanceTemplate()->SetInternalFieldCount(1);
 
       // Type::Bindings is in fact an array of `BindingItem`s.
       typename Type::Bindings bindingItems;
       NJS_ASSERT((sizeof(bindingItems) % sizeof(BindingItem)) == 0);
 
-      V8BindClassHelper(ctx, exports.GetV8HandleAs<v8::Object>(),
+      v8BindClassHelper(ctx, exports.v8GetHandleAs<v8::Object>(),
         classObj,
-        className.GetV8HandleAs<v8::String>(),
+        className.v8GetHandleAs<v8::String>(),
         reinterpret_cast<const BindingItem*>(&bindingItems),
         sizeof(bindingItems) / sizeof(BindingItem));
 
-      exports.GetV8HandleAs<v8::Object>()->Set(className.GetV8HandleAs<v8::String>(), classObj->GetFunction());
+      exports.v8GetHandleAs<v8::Object>()->Set(className.v8GetHandleAs<v8::String>(), classObj->GetFunction());
       return classObj;
     }
   };
-} // internal namespace
+} // Internal namespace
 
 // ============================================================================
-// [njs::internal - Implementation]
+// [njs::Internal - Implementation]
 // ============================================================================
 
-static NJS_NOINLINE void internal::V8ReportError(Context& ctx, Result result, const internal::ResultPayload& payload) NJS_NOEXCEPT {
+static NJS_NOINLINE void Internal::v8ReportError(Context& ctx, Result result, const ResultPayload& payload) NJS_NOEXCEPT {
+  unsigned int exceptionType = kExceptionError;
   const StaticData& staticData = _staticData;
+
   char tmpBuffer[kMaxBufferSize];
   char* msg = tmpBuffer;
 
-  int exceptionType = kExceptionError;
+  if (result >= _kResultThrowFirst && result <= _kResultThrowLast) {
+    exceptionType = result;
 
-  static const char fmtInvalidArgumentCommon[] = "Invalid argument %d (%s)";
-  static const char fmtInvalidArgumentType[] = "Invalid argument %d (%s must be of type %s)";
+    if (!payload.isInitialized())
+      msg = "";
+    else
+      msg = const_cast<char*>(payload.error.message);
+  }
+  else if (result >= _kResultValueFirst && result <= _kResultValueLast) {
+    exceptionType = kExceptionTypeError;
 
-  static const char fmtInvalidArgumentsCount[] = "Invalid count of arguments";
-  static const char fmtInvalidArgumentsCountReq[] = "Invalid count of arguments (%d required)";
+    char baseBuffer[64];
+    char* base = baseBuffer;
 
-  static const char fmtInvalidValueCommon[] = "Invalid value (%s)";
+    intptr_t argIndex = payload.value.argIndex;
+    if (argIndex == -1)
+      base = "Invalid value";
+    else if (argIndex == -2)
+      base = "Invalid argument";
+    else
+      snprintf(base, 64, "Invalid argument [%u]", static_cast<unsigned int>(argIndex));
 
-  static const char fmtInvalidConstructCall[] = "Cannot instantiate class %s without new";
-  static const char fmtAbstractConstructCall[] = "Cannot instantiate abstract class %s";
+    if (result == kResultInvalidValueTypeId) {
+      const char* typeName = staticData.getTypeName(payload.value.typeId);
+      snprintf(msg, kMaxBufferSize, "%s: Expected Type '%s'", base, typeName);
+    }
+    else if (result == kResultInvalidValueTypeName) {
+      const char* typeName = payload.value.typeName;
+      snprintf(msg, kMaxBufferSize, "%s: Expected Type '%s'", base, typeName);
+    }
+    else if (result == kResultInvalidValueCustom) {
+      snprintf(msg, kMaxBufferSize, "%s: %s", base, payload.value.message);
+    }
+    else {
+      msg = base;
+    }
+  }
+  else if (result == kResultInvalidArgumentsLength) {
+    exceptionType = kExceptionTypeError;
 
-  switch (result) {
-    // ----------------------------------------------------------------------
-    // [Throw]
-    // ----------------------------------------------------------------------
+    int minArgs = payload.arguments.minArgs;
+    int maxArgs = payload.arguments.maxArgs;
 
-    case kResultThrowError:
-    case kResultThrowTypeError:
-    case kResultThrowRangeError:
-    case kResultThrowSyntaxError:
-    case kResultThrowReferenceError:
-      exceptionType = result;
-      msg = const_cast<char*>(payload._err.msg);
-      break;
+    if (minArgs == -1 || maxArgs == -1) {
+      msg = "Invalid number of arguments: (unspecified)";
+    }
+    else if (minArgs == maxArgs) {
+      snprintf(msg, kMaxBufferSize,
+        "Invalid number of arguments: Required exactly %d",
+        static_cast<unsigned int>(minArgs));
+    }
+    else {
+      snprintf(msg, kMaxBufferSize,
+        "Invalid number of arguments: Required between %d..%d",
+        static_cast<unsigned int>(minArgs),
+        static_cast<unsigned int>(maxArgs));
+    }
+  }
+  else if (result == kResultInvalidConstructCall || result == kResultAbstractConstructCall) {
+    exceptionType = kExceptionTypeError;
 
-    // ----------------------------------------------------------------------
-    // [Invalid Argument]
-    // ----------------------------------------------------------------------
+    const char* className = "(anonymous)";
+    if (payload.isInitialized())
+      className = payload.constructCall.className;
 
-    case kResultInvalidArgumentCommon:
-      exceptionType = kExceptionTypeError;
-      snprintf(msg, kMaxBufferSize, fmtInvalidArgumentCommon,
-        payload._arg.index,
-        payload._arg.msg);
-      break;
+    const char* reason =
+      (result == kResultInvalidConstructCall)
+        ? "Use new operator"
+        : "Class is abstract";
 
-    case kResultInvalidArgumentTypeId:
-      exceptionType = kExceptionTypeError;
-      snprintf(msg, kMaxBufferSize, fmtInvalidArgumentType,
-        payload._arg.index,
-        payload._arg.msg,
-        staticData.getTypeName(payload._type.id));
-      break;
-
-    case kResultInvalidArgumentTypeName:
-      exceptionType = kExceptionTypeError;
-      snprintf(msg, kMaxBufferSize, fmtInvalidArgumentType,
-        payload._arg.index,
-        payload._arg.msg,
-        payload._type.name);
-      break;
-
-    case kResultInvalidArgumentCount:
-      exceptionType = kExceptionTypeError;
-      if (payload._arg.required == -1)
-        snprintf(msg, kMaxBufferSize, fmtInvalidArgumentsCount);
-      else
-        snprintf(msg, kMaxBufferSize, fmtInvalidArgumentsCountReq, payload._arg.required);
-      break;
-
-    case kResultInvalidValueCommon:
-      exceptionType = kExceptionTypeError;
-      snprintf(msg, kMaxBufferSize, fmtInvalidValueCommon, payload._val.msg);
-      break;
-
-    case kResultInvalidConstructCall:
-      exceptionType = kExceptionTypeError;
-      snprintf(msg, kMaxBufferSize, fmtInvalidConstructCall, payload._data);
-      break;
-
-    case kResultAbstractConstructCall:
-      exceptionType = kExceptionTypeError;
-      snprintf(msg, kMaxBufferSize, fmtAbstractConstructCall, payload._data);
-      break;
+    snprintf(msg, kMaxBufferSize,
+      "Cannot instantiate '%s': %s",
+      className,
+      reason);
+  }
+  else {
+    msg = "Unknown error";
   }
 
-  ctx.ThrowNewException(exceptionType, ctx.NewString(Utf8Ref(msg)));
+  ctx.throwNewException(exceptionType, ctx.newString(Utf8Ref(msg)));
 }
 
 // ============================================================================
@@ -2101,39 +1764,39 @@ static NJS_NOINLINE void internal::V8ReportError(Context& ctx, Result result, co
 
 #if defined(NJS_INTEGRATE_NODE)
 namespace Node {
-  static NJS_INLINE Value NewBuffer(Context& ctx, size_t size) NJS_NOEXCEPT {
+  static NJS_INLINE Value newBuffer(Context& ctx, size_t size) NJS_NOEXCEPT {
     return Value(
-      internal::V8LocalFromMaybe<v8::Object>(
-        ::node::Buffer::New(ctx.GetV8Isolate(), size)));
+      Internal::v8LocalFromMaybe<v8::Object>(
+        ::node::Buffer::New(ctx.v8GetIsolate(), size)));
   }
 
   static NJS_INLINE Value NewBuffer(Context& ctx, void* data, size_t size) NJS_NOEXCEPT {
     return Value(
-      internal::V8LocalFromMaybe<v8::Object>(
-        ::node::Buffer::New(ctx.GetV8Isolate(), static_cast<char*>(data), size)));
+      Internal::v8LocalFromMaybe<v8::Object>(
+        ::node::Buffer::New(ctx.v8GetIsolate(), static_cast<char*>(data), size)));
   }
 
   static NJS_INLINE Value NewBuffer(Context& ctx, void* data, size_t size, node::Buffer::FreeCallback cb, void* hint) NJS_NOEXCEPT {
     return Value(
-      internal::V8LocalFromMaybe<v8::Object>(
-        ::node::Buffer::New(ctx.GetV8Isolate(), static_cast<char*>(data), size, cb, hint)));
+      Internal::v8LocalFromMaybe<v8::Object>(
+        ::node::Buffer::New(ctx.v8GetIsolate(), static_cast<char*>(data), size, cb, hint)));
   }
 
-  static NJS_INLINE bool IsBuffer(const Value& obj) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
+  static NJS_INLINE bool isBuffer(const Value& obj) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
     return ::node::Buffer::HasInstance(obj._handle);
   }
 
-  static NJS_INLINE void* GetBufferData(const Value& obj) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(IsBuffer(obj));
-    return ::node::Buffer::Data(obj.GetV8HandleAs<v8::Object>());
+  static NJS_INLINE void* getBufferData(const Value& obj) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(isBuffer(obj));
+    return ::node::Buffer::Data(obj.v8GetHandleAs<v8::Object>());
   }
 
-  static NJS_INLINE size_t GetBufferSize(const Value& obj) NJS_NOEXCEPT {
-    NJS_ASSERT(obj.IsValid());
-    NJS_ASSERT(IsBuffer(obj));
-    return ::node::Buffer::Length(obj.GetV8HandleAs<v8::Object>());
+  static NJS_INLINE size_t getBufferSize(const Value& obj) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isValid());
+    NJS_ASSERT(isBuffer(obj));
+    return ::node::Buffer::Length(obj.v8GetHandleAs<v8::Object>());
   }
 } // Node namespace
 #endif // NJS_INTEGRATE_NODE
@@ -2173,37 +1836,37 @@ namespace Node {
 // ============================================================================
 
 #define NJS_BASE_CLASS(SELF, CLASS_NAME)                                      \
- public:                                                                      \
+public:                                                                       \
   typedef SELF Type;                                                          \
   typedef SELF Base;                                                          \
                                                                               \
   struct Bindings;                                                            \
   friend struct Bindings;                                                     \
                                                                               \
-  static NJS_INLINE const char* StaticClassName() NJS_NOEXCEPT {              \
+  static NJS_INLINE const char* staticClassName() NJS_NOEXCEPT {              \
     return CLASS_NAME;                                                        \
   }                                                                           \
                                                                               \
-  NJS_INLINE size_t RefCount() const NJS_NOEXCEPT { return _njsData._refCount; } \
-  NJS_INLINE void AddRef() NJS_NOEXCEPT { _njsData.AddRef(); }                \
-  NJS_INLINE void Release() NJS_NOEXCEPT { _njsData.Release(this); }          \
-  NJS_INLINE void MakeWeak() NJS_NOEXCEPT { _njsData.MakeWeak(this); }        \
+  NJS_INLINE size_t refCount() const NJS_NOEXCEPT { return _njsData._refCount; } \
+  NJS_INLINE void addRef() NJS_NOEXCEPT { _njsData.addRef(); }                \
+  NJS_INLINE void release() NJS_NOEXCEPT { _njsData.release(this); }          \
+  NJS_INLINE void makeWeak() NJS_NOEXCEPT { _njsData.makeWeak(this); }        \
                                                                               \
-  NJS_INLINE ::njs::Value AsJSObject(::njs::Context& ctx) const NJS_NOEXCEPT { \
-    return ctx.MakeLocal(_njsData._object);                                   \
+  NJS_INLINE ::njs::Value asJSObject(::njs::Context& ctx) const NJS_NOEXCEPT { \
+    return ctx.makeLocal(_njsData._object);                                   \
   }                                                                           \
                                                                               \
-  ::njs::internal::WrapData _njsData;
+  ::njs::Internal::WrapData _njsData;
 
 #define NJS_INHERIT_CLASS(SELF, BASE, CLASS_NAME)                             \
- public:                                                                      \
+public:                                                                       \
   typedef SELF Type;                                                          \
   typedef BASE Base;                                                          \
                                                                               \
   struct Bindings;                                                            \
   friend struct Bindings;                                                     \
                                                                               \
-  static NJS_INLINE const char* StaticClassName() NJS_NOEXCEPT {              \
+  static NJS_INLINE const char* staticClassName() NJS_NOEXCEPT {              \
     return CLASS_NAME;                                                        \
   }
 
@@ -2213,10 +1876,10 @@ namespace Node {
 
 // NOTE: All of these functions use V8 signatures to ensure that `This()`
 // points to a correct object. This means that it's safe to directly use
-// `internal::V8UnwrapNative<>`.
+// `Internal::v8UnwrapNative<>`.
 
 #define NJS_BIND_CLASS(SELF) \
-  struct SELF::Bindings : public ::njs::internal::V8ClassBindings< SELF >
+  struct SELF::Bindings : public ::njs::Internal::V8ClassBindings< SELF >
 
 #define NJS_BIND_CONSTRUCTOR()                                                \
   static NJS_NOINLINE void ConstructorEntry(                                  \
@@ -2225,15 +1888,12 @@ namespace Node {
     ::njs::FunctionCallContext ctx(info);                                     \
     ::njs::Result result;                                                     \
                                                                               \
-    if (!info.IsConstructCall()) {                                            \
-      result = ::njs::kResultInvalidConstructCall;                            \
-      ctx._payload._data = const_cast<char*>(Type::StaticClassName());        \
-    }                                                                         \
-    else {                                                                    \
+    if (!info.IsConstructCall())                                              \
+      result = ctx.invalidConstructCall(Type::staticClassName());             \
+    else                                                                      \
       result = ConstructorImpl(ctx);                                          \
-    }                                                                         \
                                                                               \
-    ctx.ProcessResult(result);                                                \
+    ctx._handleResult(result);                                                \
   }                                                                           \
                                                                               \
   static NJS_INLINE int ConstructorImpl(                                      \
@@ -2250,9 +1910,10 @@ namespace Node {
       result = ::njs::kResultInvalidConstructCall;                            \
     else                                                                      \
       result = ::njs::kResultAbstractConstructCall;                           \
-    ctx._payload._data = const_cast<char*>(Type::StaticClassName());          \
                                                                               \
-    ctx.ProcessResult(result);                                                \
+    ctx._payload.constructCall.className =                                    \
+      const_cast<char*>(Type::staticClassName());                             \
+    ctx._handleResult(result);                                                \
   }
 
 #define NJS_BIND_STATIC(NAME)                                                 \
@@ -2260,13 +1921,12 @@ namespace Node {
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) NJS_NOEXCEPT {   \
                                                                               \
     ::njs::FunctionCallContext ctx(info);                                     \
-    ctx.ProcessResult(StaticImpl_##NAME(ctx));                                \
+    ctx._handleResult(StaticImpl_##NAME(ctx));                                \
   }                                                                           \
                                                                               \
-  struct StaticInfo_##NAME : public ::njs::internal::BindingItem {            \
+  struct StaticInfo_##NAME : public ::njs::BindingItem {                      \
     NJS_INLINE StaticInfo_##NAME() NJS_NOEXCEPT                               \
-      : BindingItem(                                                          \
-          kTypeStatic, 0, #NAME, (const void*)StaticEntry_##NAME) {}          \
+      : BindingItem(kTypeStatic, 0, #NAME, (const void*)StaticEntry_##NAME) {}\
   } staticinfo_##NAME;                                                        \
                                                                               \
   static NJS_INLINE ::njs::Result StaticImpl_##NAME(                          \
@@ -2277,14 +1937,13 @@ namespace Node {
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) NJS_NOEXCEPT {   \
                                                                               \
     ::njs::FunctionCallContext ctx(info);                                     \
-    Type* self = ::njs::internal::V8UnwrapNative<Type>(ctx, ctx._info.This());\
-    ctx.ProcessResult(MethodImpl_##NAME(ctx, self));                          \
+    Type* self = ::njs::Internal::v8UnwrapNative<Type>(ctx, ctx._info.This());\
+    ctx._handleResult(MethodImpl_##NAME(ctx, self));                          \
   }                                                                           \
                                                                               \
-  struct MethodInfo_##NAME : public ::njs::internal::BindingItem {            \
+  struct MethodInfo_##NAME : public ::njs::BindingItem {                      \
     NJS_INLINE MethodInfo_##NAME() NJS_NOEXCEPT                               \
-      : BindingItem(                                                          \
-          kTypeMethod, 0, #NAME, (const void*)MethodEntry_##NAME) {}          \
+      : BindingItem(kTypeMethod, 0, #NAME, (const void*)MethodEntry_##NAME) {}\
   } methodinfo_##NAME;                                                        \
                                                                               \
   static NJS_INLINE ::njs::Result MethodImpl_##NAME(                          \
@@ -2296,14 +1955,13 @@ namespace Node {
       const ::v8::PropertyCallbackInfo< ::v8::Value >& info) NJS_NOEXCEPT {   \
                                                                               \
     ::njs::GetPropertyContext ctx(info);                                      \
-    Type* self = ::njs::internal::V8UnwrapNative<Type>(ctx, ctx._info.This());\
-    ctx.ProcessResult(GetImpl_##NAME(ctx, self));                             \
+    Type* self = ::njs::Internal::v8UnwrapNative<Type>(ctx, ctx._info.This());\
+    ctx._handleResult(GetImpl_##NAME(ctx, self));                             \
   }                                                                           \
                                                                               \
-  struct GetInfo_##NAME : public ::njs::internal::BindingItem {               \
+  struct GetInfo_##NAME : public ::njs::BindingItem {                         \
     NJS_INLINE GetInfo_##NAME() NJS_NOEXCEPT                                  \
-      : BindingItem(                                                          \
-          kTypeGetter, 0, #NAME, (const void*)GetEntry_##NAME) {}             \
+      : BindingItem(kTypeGetter, 0, #NAME, (const void*)GetEntry_##NAME) {}   \
   } GetInfo_##NAME;                                                           \
                                                                               \
   static NJS_INLINE ::njs::Result GetImpl_##NAME(                             \
@@ -2316,14 +1974,13 @@ namespace Node {
       const v8::PropertyCallbackInfo<void>& info) NJS_NOEXCEPT {              \
                                                                               \
     ::njs::SetPropertyContext ctx(info, value);                               \
-    Type* self = ::njs::internal::V8UnwrapNative<Type>(ctx, ctx._info.This());\
-    ctx.ProcessResult(SetImpl_##NAME(ctx, self));                             \
+    Type* self = ::njs::Internal::v8UnwrapNative<Type>(ctx, ctx._info.This());\
+    ctx._handleResult(SetImpl_##NAME(ctx, self));                             \
   }                                                                           \
                                                                               \
-  struct SetInfo_##NAME : public ::njs::internal::BindingItem {               \
+  struct SetInfo_##NAME : public ::njs::BindingItem {                         \
     NJS_INLINE SetInfo_##NAME() NJS_NOEXCEPT                                  \
-      : BindingItem(                                                          \
-          kTypeSetter, 0, #NAME, (const void*)SetEntry_##NAME) {}             \
+      : BindingItem(kTypeSetter, 0, #NAME, (const void*)SetEntry_##NAME) {}   \
   } setinfo_##NAME;                                                           \
                                                                               \
   static NJS_INLINE ::njs::Result SetImpl_##NAME(                             \
