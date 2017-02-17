@@ -22,12 +22,7 @@ NJS_BIND_CLASS(ObjectWrap) {
     NJS_CHECK(ctx.unpackArgument(0, a));
     NJS_CHECK(ctx.unpackArgument(1, b));
 
-    // Wrap.
-    ObjectWrap* wrap = new(std::nothrow) ObjectWrap(a, b);
-    NJS_CHECK(wrap);
-
-    ctx.wrap(ctx.This(), wrap);
-    return ctx.returnValue(ctx.This());
+    return ctx.returnNew<ObjectWrap>(a, b);
   }
 
   // --------------------------------------------------------------------------

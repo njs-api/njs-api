@@ -48,7 +48,7 @@ function assertThrow(fn) {
 }
 
 // ============================================================================
-// [Basic - Instantiate the native.Object and use get/set, methods, and statics]
+// [Basic - Instantiate 'native.Object' and use get/set, methods, and statics]
 // ============================================================================
 
 test("Basic functionality", function(done) {
@@ -99,7 +99,7 @@ test("Basic functionality", function(done) {
 });
 
 // ============================================================================
-// [Basic - Security]
+// [Basic - Instantiate 'native.Object' and tests if bindings are secure]
 // ============================================================================
 
 test("Basic security (incompatible signature)", function(done) {

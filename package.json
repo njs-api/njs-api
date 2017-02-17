@@ -6,9 +6,9 @@
   "description": "Nautral JavaScript Interface",
   "keywords": ["bindings", "c++", "native"],
 
-  "homepage": "https://github.com/blend2d/njs",
+  "homepage": "https://github.com/kobalicek/njs",
   "bugs": {
-    "url": "https://github.com/blend2d/njs/issues"
+    "url": "https://github.com/kobalicek/njs/issues"
   },
 
   "contributors": [
@@ -22,7 +22,7 @@
 
   "repository": {
     "type": "git",
-    "url": "git://github.com/blend2d/njs.git"
+    "url": "git://github.com/kobalicek/njs.git"
   },
 
   "scripts": {

@@ -382,11 +382,11 @@ namespace Internal {
     return kResultOk;
   }
 
-  template<typename T>
-  NJS_INLINE void v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, T* self) NJS_NOEXCEPT;
+  template<typename NativeT>
+  NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* self) NJS_NOEXCEPT;
 
-  template<typename T>
-  NJS_INLINE T* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT;
+  template<typename NativeT>
+  NJS_INLINE NativeT* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT;
 
   // Propagates `result` and its `payload` into the underlying VM.
   static NJS_NOINLINE void v8ReportError(Context& ctx, Result result, const ResultPayload& payload) NJS_NOEXCEPT;
@@ -887,17 +887,29 @@ public:
   // [Wrap / Unwrap]
   // --------------------------------------------------------------------------
 
-  template<typename T>
-  NJS_INLINE void wrap(Value obj, T* self) NJS_NOEXCEPT {
+  template<typename NativeT>
+  NJS_INLINE Result wrap(Value obj, NativeT* native) NJS_NOEXCEPT {
     NJS_ASSERT(obj.isObject());
-    Internal::v8WrapNative<T>(*this, obj.v8GetHandleAs<v8::Object>(), self);
+
+    return Internal::v8WrapNative<NativeT>(*this, obj.v8GetHandleAs<v8::Object>(), native);
   }
 
-  template<typename T>
-  NJS_INLINE T* unwrap(Value obj) NJS_NOEXCEPT {
+  template<typename NativeT, typename ...Args>
+  NJS_INLINE Result wrapNew(Value obj, Args... args) NJS_NOEXCEPT {
+    NJS_ASSERT(obj.isObject());
+
+    NativeT* native = new (std::nothrow) NativeT(args...);
+    if (!native)
+      return kResultOutOfMemory;
+
+    return Internal::v8WrapNative<NativeT>(*this, obj.v8GetHandleAs<v8::Object>(), native);
+  }
+
+  template<typename NativeT>
+  NJS_INLINE NativeT* unwrap(Value obj) NJS_NOEXCEPT {
     NJS_ASSERT(obj.isValid());
     NJS_ASSERT(obj.isObject());
-    return Internal::v8UnwrapNative<T>(*this, obj.v8GetHandleAs<v8::Object>());
+    return Internal::v8UnwrapNative<NativeT>(*this, obj.v8GetHandleAs<v8::Object>());
   }
 
   // --------------------------------------------------------------------------
@@ -1214,83 +1226,6 @@ public:
 };
 
 // ============================================================================
-// [njs::FunctionCallContext]
-// ============================================================================
-
-class FunctionCallContext : public ExecutionContext {
-public:
-  // Creates the FunctionCallContext directly from V8's `FunctionCallbackInfo<Value>`.
-  NJS_INLINE FunctionCallContext(const v8::FunctionCallbackInfo<v8::Value>& info) NJS_NOEXCEPT
-    : ExecutionContext(info.GetIsolate(), info.GetIsolate()->GetCurrentContext()),
-      _info(info) {}
-
-  // --------------------------------------------------------------------------
-  // [V8-Specific]
-  // --------------------------------------------------------------------------
-
-  NJS_INLINE const v8::FunctionCallbackInfo<v8::Value>& v8GetCallbackInfo() const NJS_NOEXCEPT {
-    return _info;
-  }
-
-  // --------------------------------------------------------------------------
-  // [Accessors]
-  // --------------------------------------------------------------------------
-
-  NJS_INLINE Value This() const NJS_NOEXCEPT { return Value(_info.This()); }
-  NJS_INLINE bool isConstructCall() const NJS_NOEXCEPT { return _info.IsConstructCall(); }
-
-  // --------------------------------------------------------------------------
-  // [Arguments]
-  // --------------------------------------------------------------------------
-
-  NJS_INLINE unsigned int getArgumentsLength() const NJS_NOEXCEPT {
-    return static_cast<unsigned int>(_info.Length());
-  }
-
-  NJS_INLINE Result verifyArgumentsLength(unsigned int n) NJS_NOEXCEPT {
-    return getArgumentsLength() != n ? invalidArgumentsLength(n)
-                                     : static_cast<Result>(kResultOk);
-  }
-
-  NJS_INLINE Value getArgument(unsigned int index) const NJS_NOEXCEPT {
-    return Value(_info.operator[](static_cast<int>(index)));
-  }
-
-  // Like `unpack()`, but accepts the argument index instead of the `Value`.
-  template<typename T>
-  NJS_INLINE Result unpackArgument(unsigned int index, T& out) NJS_NOEXCEPT {
-    return Internal::v8UnpackValue<T>(*this, _info[static_cast<int>(index)], out);
-  }
-
-  template<typename T, typename Concept>
-  NJS_INLINE Result unpackArgument(unsigned int index, T& out, const Concept& concept) NJS_NOEXCEPT {
-    return Internal::v8UnpackWithConcept<T, Concept>(*this, getArgument(index), out, concept);
-  }
-
-  // --------------------------------------------------------------------------
-  // [Return]
-  // --------------------------------------------------------------------------
-
-  template<typename T>
-  NJS_INLINE Result returnValue(const T& value) NJS_NOEXCEPT {
-    v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
-    return Internal::V8SetReturn<T>(static_cast<Context&>(*this), rv, value);
-  }
-
-  template<typename T, typename Concept>
-  NJS_INLINE Result returnValue(const T& value, const Concept& concept) NJS_NOEXCEPT {
-    v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
-    return Internal::v8SetReturnWithConcept<T, Concept>(*this, rv, value, concept);
-  }
-
-  // --------------------------------------------------------------------------
-  // [Members]
-  // --------------------------------------------------------------------------
-
-  const v8::FunctionCallbackInfo<v8::Value>& _info;
-};
-
-// ============================================================================
 // [njs::GetPropertyContext]
 // ============================================================================
 
@@ -1377,6 +1312,114 @@ public:
 
   const v8::PropertyCallbackInfo<void>& _info;
   Value _propertyValue;
+};
+
+// ============================================================================
+// [njs::FunctionCallContext]
+// ============================================================================
+
+class FunctionCallContext : public ExecutionContext {
+public:
+  // Creates the FunctionCallContext directly from V8's `FunctionCallbackInfo<Value>`.
+  NJS_INLINE FunctionCallContext(const v8::FunctionCallbackInfo<v8::Value>& info) NJS_NOEXCEPT
+    : ExecutionContext(info.GetIsolate(), info.GetIsolate()->GetCurrentContext()),
+      _info(info) {}
+
+  // --------------------------------------------------------------------------
+  // [V8-Specific]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE const v8::FunctionCallbackInfo<v8::Value>& v8GetCallbackInfo() const NJS_NOEXCEPT {
+    return _info;
+  }
+
+  // --------------------------------------------------------------------------
+  // [Accessors]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE Value This() const NJS_NOEXCEPT { return Value(_info.This()); }
+  NJS_INLINE bool isConstructCall() const NJS_NOEXCEPT { return _info.IsConstructCall(); }
+
+  // --------------------------------------------------------------------------
+  // [Arguments]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE unsigned int getArgumentsLength() const NJS_NOEXCEPT {
+    return static_cast<unsigned int>(_info.Length());
+  }
+
+  NJS_INLINE Result verifyArgumentsLength(unsigned int n) NJS_NOEXCEPT {
+    return getArgumentsLength() != n ? invalidArgumentsLength(n)
+                                     : static_cast<Result>(kResultOk);
+  }
+
+  NJS_INLINE Value getArgument(unsigned int index) const NJS_NOEXCEPT {
+    return Value(_info.operator[](static_cast<int>(index)));
+  }
+
+  // Like `unpack()`, but accepts the argument index instead of the `Value`.
+  template<typename T>
+  NJS_INLINE Result unpackArgument(unsigned int index, T& out) NJS_NOEXCEPT {
+    return Internal::v8UnpackValue<T>(*this, _info[static_cast<int>(index)], out);
+  }
+
+  template<typename T, typename Concept>
+  NJS_INLINE Result unpackArgument(unsigned int index, T& out, const Concept& concept) NJS_NOEXCEPT {
+    return Internal::v8UnpackWithConcept<T, Concept>(*this, getArgument(index), out, concept);
+  }
+
+  // --------------------------------------------------------------------------
+  // [Return]
+  // --------------------------------------------------------------------------
+
+  template<typename T>
+  NJS_INLINE Result returnValue(const T& value) NJS_NOEXCEPT {
+    v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
+    return Internal::V8SetReturn<T>(static_cast<Context&>(*this), rv, value);
+  }
+
+  template<typename T, typename Concept>
+  NJS_INLINE Result returnValue(const T& value, const Concept& concept) NJS_NOEXCEPT {
+    v8::ReturnValue<v8::Value> rv = _info.GetReturnValue();
+    return Internal::v8SetReturnWithConcept<T, Concept>(*this, rv, value, concept);
+  }
+
+  // --------------------------------------------------------------------------
+  // [Members]
+  // --------------------------------------------------------------------------
+
+  const v8::FunctionCallbackInfo<v8::Value>& _info;
+};
+
+// ============================================================================
+// [njs::ConstructCallContext]
+// ============================================================================
+
+class ConstructCallContext : public FunctionCallContext {
+public:
+  // Creates the `ConstructCallContext` directly from V8's `FunctionCallbackInfo<Value>`.
+  NJS_INLINE ConstructCallContext(const v8::FunctionCallbackInfo<v8::Value>& info) NJS_NOEXCEPT
+    : FunctionCallContext(info) {}
+
+  // --------------------------------------------------------------------------
+  // [ReturnWrap / ReturnNew]
+  // --------------------------------------------------------------------------
+
+  template<typename NativeT>
+  NJS_INLINE Result returnWrap(NativeT* native) NJS_NOEXCEPT {
+    Value obj = This();
+
+    NJS_CHECK(wrap<NativeT>(obj, native));
+    return returnValue(obj);
+  }
+
+  template<typename NativeT, typename ...Args>
+  NJS_INLINE Result returnNew(Args... args) NJS_NOEXCEPT {
+    Value obj = This();
+
+    NJS_CHECK(wrapNew<NativeT>(obj, args...));
+    return returnValue(obj);
+  }
 };
 
 // ============================================================================
@@ -1507,30 +1550,33 @@ namespace Internal {
 // ============================================================================
 
 namespace Internal {
-  template<typename T>
-  NJS_INLINE void v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, T* self) NJS_NOEXCEPT {
+  template<typename NativeT>
+  NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* native) NJS_NOEXCEPT {
     // Should be never called on an already initialized data.
-    NJS_ASSERT(!self->_njsData._object.isValid());
-    NJS_ASSERT(!self->_njsData._destroyCallback);
+    NJS_ASSERT(!native->_njsData._object.isValid());
+    NJS_ASSERT(!native->_njsData._destroyCallback);
 
     // Ensure the object was properly configured and contains internal fields.
     NJS_ASSERT(obj->InternalFieldCount() > 0);
 
-    self->_njsData._object._handle.Reset(ctx.v8GetIsolate(), obj);
-    self->_njsData._destroyCallback =(Internal::V8WrapDestroyCallback)(Internal::WrapData::destroyCallbackT<T>);
+    native->_njsData._object._handle.Reset(ctx.v8GetIsolate(), obj);
+    native->_njsData._destroyCallback =(Internal::V8WrapDestroyCallback)(Internal::WrapData::destroyCallbackT<NativeT>);
 
-    obj->SetAlignedPointerInInternalField(0, self);
-    self->_njsData.makeWeak(self);
+    obj->SetAlignedPointerInInternalField(0, native);
+    native->_njsData.makeWeak(native);
+
+    return kResultOk;
   }
 
-  template<typename T>
-  NJS_INLINE T* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT {
+  template<typename NativeT>
+  NJS_INLINE NativeT* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) NJS_NOEXCEPT {
     NJS_ASSERT(obj->InternalFieldCount() > 0);
 
-    // Cast to `T::Base` before casting to `T`. A direct cast from `void` to
-    // `T` won't work right when `T` has more than one base class.
-    void* self = obj->GetAlignedPointerFromInternalField(0);
-    return static_cast<T*>(static_cast<typename T::Base*>(self));
+    // Cast to `NativeT::Base` before casting to `NativeT*`. A direct cast from
+    // `void*` to `NativeT` won't work right when `NativeT` has more than one
+    // base class.
+    void* native = obj->GetAlignedPointerFromInternalField(0);
+    return static_cast<NativeT*>(static_cast<typename NativeT::Base*>(native));
   }
 
   static NJS_NOINLINE Result v8BindClassHelper(
@@ -1628,10 +1674,10 @@ namespace Internal {
     return kResultOk;
   }
 
-  template<typename T>
+  template<typename NativeT>
   struct V8ClassBindings {
-    typedef typename T::Base Base;
-    typedef typename T::Type Type;
+    typedef typename NativeT::Base Base;
+    typedef typename NativeT::Type Type;
 
     static NJS_NOINLINE v8::Local<v8::FunctionTemplate> Init(
       Context& ctx,
@@ -1885,7 +1931,7 @@ public:                                                                       \
   static NJS_NOINLINE void ConstructorEntry(                                  \
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) NJS_NOEXCEPT {   \
                                                                               \
-    ::njs::FunctionCallContext ctx(info);                                     \
+    ::njs::ConstructCallContext ctx(info);                                    \
     ::njs::Result result;                                                     \
                                                                               \
     if (!info.IsConstructCall())                                              \
@@ -1897,13 +1943,13 @@ public:                                                                       \
   }                                                                           \
                                                                               \
   static NJS_INLINE int ConstructorImpl(                                      \
-    ::njs::FunctionCallContext& ctx) NJS_NOEXCEPT
+    ::njs::ConstructCallContext& ctx) NJS_NOEXCEPT
 
 #define NJS_ABSTRACT_CONSTRUCTOR()                                            \
   static NJS_NOINLINE void ConstructorEntry(                                  \
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) NJS_NOEXCEPT {   \
                                                                               \
-    ::njs::FunctionCallContext ctx(info);                                     \
+    ::njs::ConstructCallContext ctx(info);                                    \
     ::njs::Result result;                                                     \
                                                                               \
     if (!info.IsConstructCall())                                              \

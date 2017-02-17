@@ -15,7 +15,7 @@ Features:
   - High-performance interface that maps to native VMs as closely as hand-written bindings - the compiled code should be very close to a code you would have normally written for a particular VM.
   - High-level interface to decrease the amount of code you need to write and to decrease the size of the resulting compiled code - no more boilerplate for each function you want to bind.
   - Highly secure bindings that should never put the application into an inconsistent state throught JavaScript.
-  - Comfortable and meaningful error handling - let users of your bindings know where the problem happened. NJS contains many helpers to make error handling less verbose yet still powerful on C++ side (it makes the most annoying type checking basically one-liners).
+  - Comfortable and meaningful error handling - let users of your bindings know where the problem happened. NJS contains many helpers to make error handling less verbose yet still powerful on C++ side (it turns the most annoying type checks to one-liners).
   - Foundation to build extensions that can be used to implement concepts - concepts are additions that enable data serialization and deserialization based on custom user types.
 
 Disclaimer

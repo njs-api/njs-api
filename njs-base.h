@@ -99,9 +99,10 @@ class HandleScope;
 class ScopedContext;
 
 class ExecutionContext;
-class FunctionCallContext;
 class GetPropertyContext;
 class SetPropertyContext;
+class FunctionCallContext;
+class ConstructCallContext;
 
 //! Local javascript value.
 class Value;
