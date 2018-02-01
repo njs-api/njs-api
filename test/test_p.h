@@ -19,14 +19,15 @@ namespace test {
 // ============================================================================
 
 // Some object to be wrapped.
-struct Object {
-  NJS_INLINE Object(int a, int b) NJS_NOEXCEPT
+class Object {
+public:
+  NJS_INLINE Object(int a, int b) noexcept
     : _a(a),
       _b(b) {
-    printf("  [C++] test::Object::Object(%d, %d)\n", _a, _b);
+    printf("  [C++] test::Object::Object(%d, %d)\n", a, b);
   }
 
-  NJS_INLINE ~Object() NJS_NOEXCEPT {
+  NJS_INLINE ~Object() noexcept {
     printf("  [C++] test::Object::~Object()\n");
   }
 
@@ -34,17 +35,17 @@ struct Object {
   // [Accessors]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE int getA() const NJS_NOEXCEPT {
-    printf("  [C++] test::Object::getA() -> %d\n", _a);
+  NJS_INLINE int a() const noexcept {
+    printf("  [C++] test::Object::a() -> %d\n", _a);
     return _a;
   }
 
-  NJS_INLINE int getB() const NJS_NOEXCEPT {
-    printf("  [C++] test::Object::getB() -> %d\n", _b);
+  NJS_INLINE int b() const noexcept {
+    printf("  [C++] test::Object::b() -> %d\n", _b);
     return _b;
   }
 
-  NJS_INLINE void setA(int a) NJS_NOEXCEPT {
+  NJS_INLINE void setA(int a) noexcept {
     printf("  [C++] test::Object::setA(%d)\n", a);
     _a = a;
   }
@@ -53,7 +54,7 @@ struct Object {
   // [Methods]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE void add(int n) NJS_NOEXCEPT {
+  NJS_INLINE void add(int n) noexcept {
     printf("  [C++] test::Object::add(%d)\n", n);
     _a += n;
     _b += n;
@@ -63,7 +64,7 @@ struct Object {
   // [Statics]
   // --------------------------------------------------------------------------
 
-  static NJS_INLINE int staticMul(int a, int b) NJS_NOEXCEPT {
+  static NJS_INLINE int staticMul(int a, int b) noexcept {
     printf("  [C++] test::Object::staticMul(%d, %d)\n", a, b);
     return a * b;
   }
@@ -76,20 +77,18 @@ struct Object {
   int _b;
 };
 
-// ============================================================================
-// [test::ObjectWrap]
-// ============================================================================
-
 // A wrapped class.
-struct ObjectWrap {
-  NJS_BASE_CLASS(ObjectWrap, "Object")
+class NJSObject {
+public:
+  NJS_BASE_CLASS(NJSObject, "Object")
 
-  NJS_INLINE ObjectWrap(int a, int b) NJS_NOEXCEPT
+  NJS_INLINE NJSObject(int a, int b) noexcept
     : _obj(a, b) {}
-  NJS_INLINE ~ObjectWrap() NJS_NOEXCEPT {}
+  NJS_INLINE ~NJSObject() noexcept {}
 
   Object _obj;
 };
+
 
 } // test namespace
 

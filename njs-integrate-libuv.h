@@ -19,8 +19,8 @@ namespace njs {
 // ============================================================================
 
 namespace Internal {
-  static NJS_NOINLINE void UVWorkCallback(uv_work_t* uvWork) NJS_NOEXCEPT;
-  static NJS_NOINLINE void UVAfterWorkCallback(uv_work_t* uvWork, int status) NJS_NOEXCEPT;
+  static NJS_NOINLINE void uvWorkCallback(uv_work_t* uvWork) noexcept;
+  static NJS_NOINLINE void uvAfterWorkCallback(uv_work_t* uvWork, int status) noexcept;
 } // Internal namespace
 
 // ============================================================================
@@ -36,7 +36,7 @@ public:
     kIndexCustom   = 3
   };
 
-  NJS_NOINLINE Task(Context& ctx, Value data) NJS_NOEXCEPT
+  NJS_NOINLINE Task(Context& ctx, Value data) noexcept
     : _runtime(ctx._runtime) {
 
     // Initialize the storage.
@@ -46,15 +46,15 @@ public:
     _uvWork.data = this;
     _uvStatus = 0;
   }
-  virtual ~Task() NJS_NOEXCEPT {}
+  virtual ~Task() noexcept {}
 
   // --------------------------------------------------------------------------
   // [Interface]
   // --------------------------------------------------------------------------
 
-  virtual void OnWork() NJS_NOEXCEPT = 0;
-  virtual void OnDone(Context& ctx, Value data) NJS_NOEXCEPT = 0;
-  virtual void OnDestroy(Context& ctx) NJS_NOEXCEPT { delete this; }
+  virtual void onWork() noexcept = 0;
+  virtual void onDone(Context& ctx, Value data) noexcept = 0;
+  virtual void onDestroy(Context& ctx) noexcept { delete this; }
 
   // --------------------------------------------------------------------------
   // [Members]
@@ -64,13 +64,13 @@ public:
   Runtime _runtime;
 
   //! Object used as a storage of indexed values. Only accessible when the task
-  //! is created and/or completed, it's not possible to access it inside `OnWork`
+  //! is created and/or completed, it's not possible to access it inside `onWork`
   //! from a different thread.
   Persistent _data;
 
   //! UV work data.
   uv_work_t _uvWork;
-  //! UV status - initially zero, changed by `UVAfterWorkCallback`.
+  //! UV status - initially zero, changed by `uvAfterWorkCallback`.
   int _uvStatus;
 };
 
@@ -78,24 +78,24 @@ static NJS_NOINLINE void PostTask(Task* task) {
   uv_queue_work(
     uv_default_loop(),
     &task->_uvWork,
-    Internal::UVWorkCallback,
-    Internal::UVAfterWorkCallback);
+    Internal::uvWorkCallback,
+    Internal::uvAfterWorkCallback);
 }
 
 namespace Internal {
-  static NJS_NOINLINE void UVWorkCallback(uv_work_t* uvWork) NJS_NOEXCEPT {
+  static NJS_NOINLINE void uvWorkCallback(uv_work_t* uvWork) noexcept {
     Task* task = static_cast<Task*>(uvWork->data);
-    task->OnWork();
+    task->onWork();
   }
 
-  static NJS_NOINLINE void UVAfterWorkCallback(uv_work_t* uvWork, int status) NJS_NOEXCEPT {
+  static NJS_NOINLINE void uvAfterWorkCallback(uv_work_t* uvWork, int status) noexcept {
     Task* task = static_cast<Task*>(uvWork->data);
 
     njs::ScopedContext ctx(task->_runtime);
     njs::Value data = ctx.makeLocal(task->_data);
 
-    task->OnDone(ctx, data);
-    task->OnDestroy(ctx);
+    task->onDone(ctx, data);
+    task->onDestroy(ctx);
   }
 } // Internal namespace
 

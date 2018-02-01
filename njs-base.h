@@ -11,13 +11,14 @@
 // [Dependencies]
 #include <stdarg.h>
 #include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
 
+#include <cstdlib>
+#include <cstring>
 #include <new>
+#include <utility>
 
 // ============================================================================
-// [njs::#defs]
+// [njs::Defines]
 // ============================================================================
 
 #define NJS_VERSION 0x010000
@@ -25,31 +26,13 @@
 #if defined(_MSC_VER)
 # define NJS_INLINE __forceinline
 # define NJS_NOINLINE __declspec(noinline)
-# if _MSC_FULL_VER >= 180021114
-#  define NJS_NOEXCEPT noexcept
-# else
-#  define NJS_NOEXCEPT throw()
-# endif
-#elif defined(__clang__)
+#elif defined(__clang__) || defined(__GNUC__)
 # define NJS_INLINE inline __attribute__((__always_inline__))
 # define NJS_NOINLINE __attribute__((__noinline__))
-# if __has_feature(cxx_noexcept)
-#  define NJS_NOEXCEPT noexcept
-# endif
-#elif defined(__GNUC__)
-# define NJS_INLINE inline __attribute__((__always_inline__))
-# define NJS_NOINLINE __attribute__((__noinline__))
-# if (__GNUC__ * 10000 + __GNUC_MINOR__ * 100) >= 40600
-#  define NJS_NOEXCEPT noexcept
-# endif
 #else
 # define NJS_INLINE inline
 # define NJS_NOINLINE
 #endif
-
-#if !defined(NJS_NOEXCEPT)
-# define NJS_NOEXCEPT
-#endif // !NJS_NOEXCEPT
 
 #if !defined(NJS_ASSERT)
 # include <assert.h>
@@ -57,22 +40,31 @@
 #endif // !NJS_ASSERT
 
 // Miscellaneous macros used by NJS.
-#define NJS_NONCOPYABLE(SELF) \
-private: \
-  NJS_INLINE SELF(const SELF&) NJS_NOEXCEPT; \
-  NJS_INLINE SELF& operator=(const SELF&) NJS_NOEXCEPT; \
+#define NJS_NONCOPYABLE(SELF)                                                 \
+private:                                                                      \
+  NJS_INLINE SELF(const SELF&) noexcept = delete;                             \
+  NJS_INLINE SELF& operator=(const SELF&) noexcept = delete;                  \
 public:
+
+// ============================================================================
+// [njs::]
+// ============================================================================
 
 namespace njs {
 
 // ============================================================================
-// [Forward Declarations]
+// [njs::Forward]
 // ============================================================================
 
 // --- Provided here ---
 
+//! A tagged string reference that specifies LATIN-1 encoding.
 class Latin1Ref;
+
+//! A tagged string reference that specifies UTF-8 encoding.
 class Utf8Ref;
+
+//! A tagged string reference that specifies UTF-16 encoding.
 class Utf16Ref;
 
 // --- Provided by the VM engine ---
@@ -81,14 +73,14 @@ class Utf16Ref;
 //! multiple separate contexts.
 class Runtime;
 
+//! Handle scope if VM is using that concept, currently maps to `v8::HandleScope`.
+class HandleScope;
+
 //! Basic context for interacting with VM. Holds all necessary variables to make
 //! the interaction simple, but doesn't offer advanced features that require
 //! memory management on C++ side. See `ExecutionContext` that provides an
 //! additional functionality.
 class Context;
-
-//! Handle scope if VM is using that concept, currently maps to `v8::HandleScope`.
-class HandleScope;
 
 //! Scoped context is a composition of `Context` and `HandleScope`. You should
 //! prefer this type of context in case that you enter a call that was not
@@ -110,27 +102,44 @@ class Value;
 //! Persistent javascript value.
 class Persistent;
 
+//! Result value - just a mark to indicate all APIs that returns `ResultCode`.
+typedef unsigned int Result;
+
+//! Contains additional information related to `Result`.
+struct ResultPayload;
+
 // ============================================================================
-// [njs::Limits]
+// [njs::Globals]
 // ============================================================================
 
+namespace Globals {
+
 //! NJS limits.
-enum Limits {
+enum Limits : uint32_t {
   // NOTE: Other limits depend on VM. They should be established at the top of
   // the VM implementation file.
 
-  //! Maximum length of a single enumeration (string).
-  kMaxEnumLength = 64,
-  //! Maximum length of a buffer used internally to format messages (errors).
+  //! Maximum size of a single enumeration (string).
+  kMaxEnumSize = 64,
+  //! Maximum size of a buffer used internally to format messages (errors).
   kMaxBufferSize = 256
 };
 
-// ============================================================================
-// [njs::ValueType]
-// ============================================================================
+//! Type-trait ids.
+enum TraitId : uint32_t {
+  kTraitIdUnknown    = 0,
+  kTraitIdBool       = 1,
+  kTraitIdSafeInt    = 2,
+  kTraitIdSafeUint   = 3,
+  kTraitIdUnsafeInt  = 4,
+  kTraitIdUnsafeUint = 5,
+  kTraitIdFloat      = 6,
+  kTraitIdDouble     = 7,
+  kTraitIdStrRef     = 8
+};
 
-// VM neutral value type.
-enum ValueType {
+// Value type (VM independent).
+enum ValueType : uint32_t {
   kValueNone = 0,
 
   kValueBool,
@@ -180,12 +189,8 @@ enum ValueType {
   kValueCount
 };
 
-// ============================================================================
-// [njs::ExceptionType]
-// ============================================================================
-
-// VM neutral exception type.
-enum ExceptionType {
+// Exception type (VM independent).
+enum ExceptionType : uint32_t {
   kExceptionNone = 0,
 
   kExceptionError = 1,
@@ -199,7 +204,7 @@ enum ExceptionType {
 // [njs::ConceptType]
 // ============================================================================
 
-enum ConceptType {
+enum ConceptType : uint32_t {
   kConceptSerializer = 0,
   kConceptValidator = 1
 };
@@ -209,7 +214,7 @@ enum ConceptType {
 // ============================================================================
 
 // VM neutral result code.
-enum ResultCode {
+enum ResultCode : uint32_t {
   kResultOk = 0,
 
   // NJS errors mapped to JavaScript's native error objects.
@@ -248,8 +253,40 @@ enum ResultCode {
   _kResultValueLast = kResultUnsafeUint64Conversion
 };
 
-// Result value - just a mark to indicate all APIs that returns `ResultCode`.
-typedef unsigned int Result;
+} // Globals namespace
+
+// ============================================================================
+// [njs::Internal::Pass]
+// ============================================================================
+
+namespace Internal {
+
+template<typename T>
+inline T& pass(T& arg) { return arg; }
+
+} // Internal namespace
+
+// ============================================================================
+// [njs::Internal::CastCheck]
+// ============================================================================
+
+namespace Internal {
+
+// Won't compile if `Src` type can't be naturally casted to `Dst` type.
+template<typename Dst, typename Src>
+NJS_INLINE void checkNaturalCast(const Src* src) noexcept {
+  const Dst* dst = src;
+  (void)dst;
+}
+
+// Won't compile if `Src` type can't be statically casted to `Dst` type.
+template<typename Dst, typename Src>
+NJS_INLINE void checkStaticCast(const Src* src) noexcept {
+  const Dst* dst = static_cast<const Src*>(src);
+  (void)dst;
+}
+
+} // Internal namespace
 
 // ============================================================================
 // [njs::Internal::TypeTraits]
@@ -259,81 +296,68 @@ typedef unsigned int Result;
 // [ ] Missing wchar_t, char16_t, char32_t
 // [ ] Any other types we should worry about?
 namespace Internal {
-  enum TraitId {
-    kTraitIdUnknown    = 0,
-    kTraitIdBool       = 1,
-    kTraitIdSafeInt    = 2,
-    kTraitIdSafeUint   = 3,
-    kTraitIdUnsafeInt  = 4,
-    kTraitIdUnsafeUint = 5,
-    kTraitIdFloat      = 6,
-    kTraitIdDouble     = 7,
-    kTraitIdStrRef     = 8
+
+template<typename T, int Id>
+struct BaseTraits {
+  enum {
+    kTraitId     = Id,
+    kIsPrimitive = Id >= Globals::kTraitIdBool     && Id <= Globals::kTraitIdDouble,
+    kIsBool      = Id == Globals::kTraitIdBool,
+    kIsInt       = Id >= Globals::kTraitIdSafeInt  && Id <= Globals::kTraitIdUnsafeUint,
+    kIsSigned    = Id == Globals::kTraitIdSafeInt  || Id == Globals::kTraitIdUnsafeInt,
+    kIsUnsigned  = Id == Globals::kTraitIdSafeUint || Id == Globals::kTraitIdUnsafeUint,
+    kIsReal      = Id >= Globals::kTraitIdFloat    && Id <= Globals::kTraitIdDouble,
+    kIsStrRef    = Id == Globals::kTraitIdStrRef
   };
+};
 
-  template<typename T, int Id>
-  struct BaseTraits {
-    enum {
-      kTraitId     = Id,
-      kIsPrimitive = Id >= kTraitIdBool     && Id <= kTraitIdDouble,
-      kIsBool      = Id == kTraitIdBool,
-      kIsInt       = Id >= kTraitIdSafeInt  && Id <= kTraitIdUnsafeUint,
-      kIsSigned    = Id == kTraitIdSafeInt  || Id == kTraitIdUnsafeInt,
-      kIsUnsigned  = Id == kTraitIdSafeUint || Id == kTraitIdUnsafeUint,
-      kIsReal      = Id >= kTraitIdFloat    && Id <= kTraitIdDouble,
-      kIsStrRef    = Id == kTraitIdStrRef
-    };
-  };
+template<typename T>
+struct IsSignedIntType {
+  enum { kValue = static_cast<T>(~static_cast<T>(0)) < static_cast<T>(0) };
+};
 
-  // Type traits are used when converting values from C++ <-> Javascript.
-  template<typename T>
-  struct TypeTraits : public BaseTraits<T, kTraitIdUnknown> {};
+// Type traits are used when converting values from C++ <-> Javascript.
+template<typename T>
+struct TypeTraits : public BaseTraits<T, Globals::kTraitIdUnknown> {};
 
-  template<> struct TypeTraits<bool     > : public BaseTraits<bool     , kTraitIdBool  > {};
-  template<> struct TypeTraits<float    > : public BaseTraits<float    , kTraitIdFloat > {};
-  template<> struct TypeTraits<double   > : public BaseTraits<double   , kTraitIdDouble> {};
+template<> struct TypeTraits<bool     > : public BaseTraits<bool     , Globals::kTraitIdBool  > {};
+template<> struct TypeTraits<float    > : public BaseTraits<float    , Globals::kTraitIdFloat > {};
+template<> struct TypeTraits<double   > : public BaseTraits<double   , Globals::kTraitIdDouble> {};
 
-  template<> struct TypeTraits<Latin1Ref> : public BaseTraits<Latin1Ref, kTraitIdStrRef> {};
-  template<> struct TypeTraits<Utf8Ref  > : public BaseTraits<Utf8Ref  , kTraitIdStrRef> {};
-  template<> struct TypeTraits<Utf16Ref > : public BaseTraits<Utf16Ref , kTraitIdStrRef> {};
-
-  template<typename T>
-  struct IsSignedType {
-    enum { kValue = static_cast<T>(~static_cast<T>(0)) < static_cast<T>(0) };
-  };
+template<> struct TypeTraits<Latin1Ref> : public BaseTraits<Latin1Ref, Globals::kTraitIdStrRef> {};
+template<> struct TypeTraits<Utf8Ref  > : public BaseTraits<Utf8Ref  , Globals::kTraitIdStrRef> {};
+template<> struct TypeTraits<Utf16Ref > : public BaseTraits<Utf16Ref , Globals::kTraitIdStrRef> {};
 
 #define NJS_INT_TRAITS(T)                                                     \
-  template<>                                                                  \
-  struct TypeTraits<T>                                                        \
-    : public BaseTraits < T, IsSignedType<T>::kValue                          \
-      ? (sizeof(T) <= 4 ? kTraitIdSafeInt  : kTraitIdUnsafeInt )              \
-      : (sizeof(T) <= 4 ? kTraitIdSafeUint : kTraitIdUnsafeUint) >            \
-  {                                                                           \
-    static NJS_INLINE T minValue() NJS_NOEXCEPT {                             \
-      return kIsSigned                                                        \
-        ? static_cast<T>(1) << (sizeof(T) * 8 - 1)                            \
-        : static_cast<T>(0);                                                  \
-    }                                                                         \
+template<>                                                                    \
+struct TypeTraits<T> : public BaseTraits<T, IsSignedIntType<T>::kValue        \
+  ? (sizeof(T) < 8 ? Globals::kTraitIdSafeInt  : Globals::kTraitIdUnsafeInt ) \
+  : (sizeof(T) < 8 ? Globals::kTraitIdSafeUint : Globals::kTraitIdUnsafeUint) > \
+{                                                                             \
+  static NJS_INLINE T minValue() noexcept {                                   \
+    return kIsSigned ? static_cast<T>(1) << (sizeof(T) * 8 - 1)               \
+                     : static_cast<T>(0);                                     \
+  }                                                                           \
                                                                               \
-    static NJS_INLINE T maxValue() NJS_NOEXCEPT {                             \
-      return kIsSigned                                                        \
-        ? ~static_cast<T>(0) ^ minValue()                                     \
-        : ~static_cast<T>(0);                                                 \
-    }                                                                         \
-  }
+  static NJS_INLINE T maxValue() noexcept {                                   \
+    return kIsSigned ? ~static_cast<T>(0) ^ minValue()                        \
+                     : ~static_cast<T>(0);                                    \
+  }                                                                           \
+}
 
-  NJS_INT_TRAITS(char);
-  NJS_INT_TRAITS(signed char);
-  NJS_INT_TRAITS(unsigned char);
-  NJS_INT_TRAITS(short);
-  NJS_INT_TRAITS(unsigned short);
-  NJS_INT_TRAITS(int);
-  NJS_INT_TRAITS(unsigned int);
-  NJS_INT_TRAITS(long);
-  NJS_INT_TRAITS(unsigned long);
-  NJS_INT_TRAITS(long long);
-  NJS_INT_TRAITS(unsigned long long);
+NJS_INT_TRAITS(char);
+NJS_INT_TRAITS(signed char);
+NJS_INT_TRAITS(unsigned char);
+NJS_INT_TRAITS(short);
+NJS_INT_TRAITS(unsigned short);
+NJS_INT_TRAITS(int);
+NJS_INT_TRAITS(unsigned int);
+NJS_INT_TRAITS(long);
+NJS_INT_TRAITS(unsigned long);
+NJS_INT_TRAITS(long long);
+NJS_INT_TRAITS(unsigned long long);
 #undef NJS_INT_TRAITS
+
 } // Internal namespace
 
 // ============================================================================
@@ -341,107 +365,109 @@ namespace Internal {
 // ============================================================================
 
 namespace IntUtils {
-  template<typename In, typename Out, int IsNarrowing, int IsSigned>
-  struct IntCastImpl {
-    static NJS_INLINE Result op(In in, Out& out) NJS_NOEXCEPT {
-      out = static_cast<Out>(in);
-      return kResultOk;
+
+template<typename In, typename Out, int IsNarrowing, int IsSigned>
+struct IntCastImpl {
+  static NJS_INLINE Result op(In in, Out& out) noexcept {
+    out = static_cast<Out>(in);
+    return Globals::kResultOk;
+  }
+};
+
+// Unsigned narrowing.
+template<typename In, typename Out>
+struct IntCastImpl<In, Out, 1, 0> {
+  static NJS_INLINE Result op(In in, Out& out) noexcept {
+    if (in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()))
+      return Globals::kResultInvalidValue;
+
+    out = static_cast<Out>(in);
+    return Globals::kResultOk;
+  }
+};
+
+// Signed narrowing.
+template<typename In, typename Out>
+struct IntCastImpl<In, Out, 1, 1> {
+  static NJS_INLINE Result op(In in, Out& out) noexcept {
+    if (in < static_cast<In>(Internal::TypeTraits<Out>::minValue()) ||
+        in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()) )
+      return Globals::kResultInvalidValue;
+
+    out = static_cast<Out>(in);
+    return Globals::kResultOk;
+  }
+};
+
+template<typename In, typename Out>
+NJS_INLINE Result intCast(In in, Out& out) noexcept {
+  return IntCastImpl<
+    In, Out,
+    (sizeof(In) > sizeof(Out)),
+    Internal::TypeTraits<In>::kIsSigned && Internal::TypeTraits<Out>::kIsSigned>::op(in, out);
+}
+
+template<typename T, size_t Size, int IsSigned>
+struct IsSafeIntImpl {
+  static NJS_INLINE bool op(T x) noexcept {
+    // [+] 32-bit and less are safe.
+    // [+] 64-bit types are specialized.
+    // [-] More than 64-bit types are not supported.
+    return Size <= 4;
+  }
+};
+
+template<typename T>
+struct IsSafeIntImpl<T, 8, 0> {
+  static NJS_INLINE bool op(T x) noexcept {
+    return static_cast<uint64_t>(x) <= static_cast<uint64_t>(9007199254740991ull);
+  }
+};
+
+template<typename T>
+struct IsSafeIntImpl<T, 8, 1> {
+  static NJS_INLINE bool op(T x) noexcept {
+    return static_cast<int64_t>(x) >= -static_cast<int64_t>(9007199254740991ll) &&
+           static_cast<int64_t>(x) <=  static_cast<int64_t>(9007199254740991ll) ;
+  }
+};
+
+// Returns true if the given integer is representable in JS as it uses `double`
+// externally to represent all types. This function is basically the same as
+// JavaScript's `Number.isSafeInteger()`, which is equivalent to:
+//
+//   `x >= -Number.MAX_SAFE_INTEGER && x <= Number.MAX_SAFE_INTEGER`
+//
+// but accessible from C++. The MAX_SAFE_INTEGER value is equivalent to 2^53 - 1.
+template<typename T>
+NJS_INLINE bool isSafeInt(T x) noexcept {
+  return IsSafeIntImpl<T, sizeof(T), Internal::TypeTraits<T>::kIsSigned>::op(x);
+}
+
+static NJS_INLINE Result doubleToInt64(double in, int64_t& out) noexcept {
+  if (in >= -9007199254740991.0 && in <= 9007199254740991.0) {
+    int64_t x = static_cast<int64_t>(in);
+    if (static_cast<double>(x) == in) {
+      out = x;
+      return Globals::kResultOk;
     }
-  };
-
-  // Unsigned narrowing.
-  template<typename In, typename Out>
-  struct IntCastImpl<In, Out, 1, 0> {
-    static NJS_INLINE Result op(In in, Out& out) NJS_NOEXCEPT {
-      if (in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()))
-        return kResultInvalidValue;
-
-      out = static_cast<Out>(in);
-      return kResultOk;
-    }
-  };
-
-  // Signed narrowing.
-  template<typename In, typename Out>
-  struct IntCastImpl<In, Out, 1, 1> {
-    static NJS_INLINE Result op(In in, Out& out) NJS_NOEXCEPT {
-      if (in < static_cast<In>(Internal::TypeTraits<Out>::minValue()) ||
-          in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()) )
-        return kResultInvalidValue;
-
-      out = static_cast<Out>(in);
-      return kResultOk;
-    }
-  };
-
-  template<typename In, typename Out>
-  NJS_INLINE Result intCast(In in, Out& out) NJS_NOEXCEPT {
-    return IntCastImpl<
-      In, Out,
-      (sizeof(In) > sizeof(Out)),
-      Internal::TypeTraits<In>::kIsSigned && Internal::TypeTraits<Out>::kIsSigned>::op(in, out);
   }
 
-  template<typename T, size_t Size, int IsSigned>
-  struct IsSafeIntImpl {
-    static NJS_INLINE bool op(T x) NJS_NOEXCEPT {
-      // [+] 32-bit and less are safe.
-      // [+] 64-bit types are specialized.
-      // [-] More than 64-bit types are not supported.
-      return Size <= 4;
-    }
-  };
+  return Globals::kResultInvalidValue;
+}
 
-  template<typename T>
-  struct IsSafeIntImpl<T, 8, 0> {
-    static NJS_INLINE bool op(T x) NJS_NOEXCEPT {
-      return static_cast<uint64_t>(x) <= static_cast<uint64_t>(9007199254740991ull);
+static NJS_INLINE Result doubleToUint64(double in, uint64_t& out) noexcept {
+  if (in >= 0.0 && in <= 9007199254740991.0) {
+    int64_t x = static_cast<int64_t>(in);
+    if (static_cast<double>(x) == in) {
+      out = static_cast<uint64_t>(x);
+      return Globals::kResultOk;
     }
-  };
-
-  template<typename T>
-  struct IsSafeIntImpl<T, 8, 1> {
-    static NJS_INLINE bool op(T x) NJS_NOEXCEPT {
-      return static_cast<int64_t>(x) >= -static_cast<int64_t>(9007199254740991ll) &&
-             static_cast<int64_t>(x) <=  static_cast<int64_t>(9007199254740991ll) ;
-    }
-  };
-
-  // Returns true if the given integer is representable in JS as it uses `double`
-  // externally to represent all types. This function is basically the same as
-  // JavaScript's `Number.isSafeInteger()`, which is equivalent to:
-  //
-  //   `x >= -Number.MAX_SAFE_INTEGER && x <= Number.MAX_SAFE_INTEGER`
-  //
-  // but accessible from C++. The MAX_SAFE_INTEGER value is equivalent to 2^53 - 1.
-  template<typename T>
-  NJS_INLINE bool isSafeInt(T x) NJS_NOEXCEPT {
-    return IsSafeIntImpl<T, sizeof(T), Internal::TypeTraits<T>::kIsSigned>::op(x);
   }
 
-  static NJS_INLINE Result doubleToInt64(double in, int64_t& out) NJS_NOEXCEPT {
-    if (in >= -9007199254740991.0 && in <= 9007199254740991.0) {
-      int64_t x = static_cast<int64_t>(in);
-      if (static_cast<double>(x) == in) {
-        out = x;
-        return kResultOk;
-      }
-    }
+  return Globals::kResultInvalidValue;
+}
 
-    return kResultInvalidValue;
-  }
-
-  static NJS_INLINE Result doubleToUint64(double in, uint64_t& out) NJS_NOEXCEPT {
-    if (in >= 0.0 && in <= 9007199254740991.0) {
-      int64_t x = static_cast<int64_t>(in);
-      if (static_cast<double>(x) == in) {
-        out = static_cast<uint64_t>(x);
-        return kResultOk;
-      }
-    }
-
-    return kResultInvalidValue;
-  }
 } // IntUtils namespace
 
 // ============================================================================
@@ -449,54 +475,49 @@ namespace IntUtils {
 // ============================================================================
 
 namespace StrUtils {
-  // Inlining probably doesn't matter here, `vsnprintf` is complex and one more
-  // function call shouldn't make any difference here, so don't inline.
-  //
-  // NOTE: This function doesn't guarantee NULL termination, this means that the
-  // return value has to be USED. This is no problem for NJS library as all VM
-  // calls allow to specify the length of the string(s) passed.
-  static NJS_NOINLINE unsigned int vsformat(char* dst, size_t maxLength, const char* fmt, va_list ap) NJS_NOEXCEPT {
-#if defined(_MSC_VER) && _MSC_VER < 1900
-    int result = ::_vsnprintf(dst, maxLength, fmt, ap);
-#else
-    int result = ::vsnprintf(dst, maxLength, fmt, ap);
-#endif
 
-    if (result < 0)
-      return 0;
+// Inlining probably doesn't matter here, `vsnprintf` is complex and one more
+// function call shouldn't make any difference, so don't inline.
+static NJS_NOINLINE unsigned int vsformat(char* dst, size_t maxLength, const char* fmt, va_list ap) noexcept {
+  int result = std::vsnprintf(dst, maxLength, fmt, ap);
+  unsigned int size = static_cast<unsigned int>(result);
 
-    if (static_cast<unsigned int>(result) > maxLength)
-      return static_cast<unsigned int>(maxLength);
+  if (result < 0)
+    size = 0;
+  else if (static_cast<unsigned int>(result) >= maxLength)
+    size = maxLength - 1;
 
-    return static_cast<unsigned int>(result);
-  }
-
-  // Cannot be inlined, some compilers (like GCC) have problems with variable
-  // argument functions declared as __always_inline__.
-  //
-  // NOTE: The function has the same behavior as `vsformat()`.
-  static NJS_NOINLINE unsigned int sformat(char* dst, size_t maxLength, const char* fmt, ...) NJS_NOEXCEPT {
-    va_list ap;
-    va_start(ap, fmt);
-    unsigned int result = vsformat(dst, maxLength, fmt, ap);
-    va_end(ap);
-    return result;
-  }
-
-  // Required mostly by `Utf16` string, generalized for any type.
-  template<typename CharType>
-  NJS_INLINE size_t slen(const CharType* str) NJS_NOEXCEPT {
-    NJS_ASSERT(str != NULL);
-
-    size_t i = 0;
-    while (str[i] != CharType(0))
-      i++;
-    return i;
-  }
-  // Specialize a bit...
-  template<>
-  NJS_INLINE size_t slen(const char* str) NJS_NOEXCEPT { return ::strlen(str); }
+  dst[size] = 0;
+  return size;
 }
+
+// Cannot be inlined, some compilers (like GCC) have problems with variable
+// argument functions declared as __always_inline__.
+//
+// NOTE: The function has the same behavior as `vsformat()`.
+static NJS_NOINLINE unsigned int sformat(char* dst, size_t maxLength, const char* fmt, ...) noexcept {
+  va_list ap;
+  va_start(ap, fmt);
+  unsigned int result = vsformat(dst, maxLength, fmt, ap);
+  va_end(ap);
+  return result;
+}
+
+// Required mostly by `Utf16` string, generalized for any type.
+template<typename CharType>
+NJS_INLINE size_t slen(const CharType* str) noexcept {
+  NJS_ASSERT(str != NULL);
+
+  size_t i = 0;
+  while (str[i] != CharType(0))
+    i++;
+  return i;
+}
+// Specialize a bit...
+template<>
+NJS_INLINE size_t slen(const char* str) noexcept { return std::strlen(str); }
+
+} // StrUtils namespace
 
 // ============================================================================
 // [njs::StrRef]
@@ -517,44 +538,44 @@ class StrRef {
 public:
   typedef T Type;
 
-  NJS_INLINE StrRef() NJS_NOEXCEPT { reset(); }
-  explicit NJS_INLINE StrRef(T* data) NJS_NOEXCEPT { init(data); }
-  NJS_INLINE StrRef(T* data, size_t length) NJS_NOEXCEPT { init(data, length); }
-  NJS_INLINE StrRef(const StrRef<T>& other) NJS_NOEXCEPT { init(other); }
+  NJS_INLINE StrRef() noexcept { reset(); }
+  explicit NJS_INLINE StrRef(T* data) noexcept { init(data); }
+  NJS_INLINE StrRef(T* data, size_t size) noexcept { init(data, size); }
+  NJS_INLINE StrRef(const StrRef<T>& other) noexcept { init(other); }
 
-  NJS_INLINE bool isInitialized() const NJS_NOEXCEPT {
+  NJS_INLINE bool isInitialized() const noexcept {
     return _data != NULL;
   }
 
-  NJS_INLINE void reset() NJS_NOEXCEPT {
+  NJS_INLINE void reset() noexcept {
     _data = NULL;
-    _length = 0;
+    _size = 0;
   }
 
-  NJS_INLINE void init(T* data) NJS_NOEXCEPT {
+  NJS_INLINE void init(T* data) noexcept {
     init(data, StrUtils::slen(data));
   }
 
-  NJS_INLINE void init(T* data, size_t length) NJS_NOEXCEPT {
+  NJS_INLINE void init(T* data, size_t size) noexcept {
     _data = data;
-    _length = length;
+    _size = size;
   }
 
-  NJS_INLINE void init(const StrRef<T>& other) NJS_NOEXCEPT {
+  NJS_INLINE void init(const StrRef<T>& other) noexcept {
     _data = other._data;
-    _length = other._length;
+    _size = other._size;
   }
 
-  NJS_INLINE bool hasData() const NJS_NOEXCEPT { return _data != NULL; }
-  NJS_INLINE T* getData() const NJS_NOEXCEPT { return _data; }
-  NJS_INLINE size_t getLength() const NJS_NOEXCEPT { return _length; }
+  NJS_INLINE bool hasData() const noexcept { return _data != NULL; }
+  NJS_INLINE T* data() const noexcept { return _data; }
+  NJS_INLINE size_t size() const noexcept { return _size; }
 
   // ------------------------------------------------------------------------
   // [Members]
   // ------------------------------------------------------------------------
 
   T* _data;
-  size_t _length;
+  size_t _size;
 };
 
 // ============================================================================
@@ -563,13 +584,13 @@ public:
 
 class Latin1Ref : public StrRef<const char> {
 public:
-  explicit NJS_INLINE Latin1Ref(const char* data) NJS_NOEXCEPT
+  explicit NJS_INLINE Latin1Ref(const char* data) noexcept
     : StrRef(data) {}
 
-  NJS_INLINE Latin1Ref(const char* data, size_t length) NJS_NOEXCEPT
-    : StrRef(data, length) {}
+  NJS_INLINE Latin1Ref(const char* data, size_t size) noexcept
+    : StrRef(data, size) {}
 
-  NJS_INLINE Latin1Ref(const Latin1Ref& other) NJS_NOEXCEPT
+  NJS_INLINE Latin1Ref(const Latin1Ref& other) noexcept
     : StrRef(other) {}
 };
 
@@ -579,13 +600,13 @@ public:
 
 class Utf8Ref : public StrRef<const char> {
 public:
-  explicit NJS_INLINE Utf8Ref(const char* data) NJS_NOEXCEPT
+  explicit NJS_INLINE Utf8Ref(const char* data) noexcept
     : StrRef(data) {}
 
-  NJS_INLINE Utf8Ref(const char* data, size_t length) NJS_NOEXCEPT
-    : StrRef(data, length) {}
+  NJS_INLINE Utf8Ref(const char* data, size_t size) noexcept
+    : StrRef(data, size) {}
 
-  NJS_INLINE Utf8Ref(const Utf8Ref& other) NJS_NOEXCEPT
+  NJS_INLINE Utf8Ref(const Utf8Ref& other) noexcept
     : StrRef(other) {}
 };
 
@@ -595,13 +616,13 @@ public:
 
 class Utf16Ref : public StrRef<const uint16_t> {
 public:
-  explicit NJS_INLINE Utf16Ref(const uint16_t* data) NJS_NOEXCEPT
+  explicit NJS_INLINE Utf16Ref(const uint16_t* data) noexcept
     : StrRef(data) {}
 
-  NJS_INLINE Utf16Ref(const uint16_t* data, size_t length) NJS_NOEXCEPT
-    : StrRef(data, length) {}
+  NJS_INLINE Utf16Ref(const uint16_t* data, size_t size) noexcept
+    : StrRef(data, size) {}
 
-  NJS_INLINE Utf16Ref(const Utf16Ref& other) NJS_NOEXCEPT
+  NJS_INLINE Utf16Ref(const Utf16Ref& other) noexcept
     : StrRef(other) {}
 };
 
@@ -614,17 +635,17 @@ class Range {
 public:
   typedef T Type;
 
-  enum { kConceptType = kConceptValidator };
+  enum { kConceptType = Globals::kConceptValidator };
 
-  NJS_INLINE Range<T>(Type minValue, Type maxValue) NJS_NOEXCEPT
+  NJS_INLINE Range<T>(Type minValue, Type maxValue) noexcept
     : _minValue(minValue),
       _maxValue(maxValue) {}
 
-  NJS_INLINE Result validate(const Type& value) const NJS_NOEXCEPT {
+  NJS_INLINE Result validate(const Type& value) const noexcept {
     if (value >= _minValue && value <= _maxValue)
-      return kResultOk;
+      return Globals::kResultOk;
     else
-      return kResultInvalidValueRange;
+      return Globals::kResultInvalidValueRange;
   }
 
   Type _minValue;
@@ -639,13 +660,7 @@ public:
 //! class into JavaScript. Each `BindingItem` contains information about a
 //! getter|setter, static (class) function, or a member function.
 struct BindingItem {
-  NJS_INLINE BindingItem(int type, int flags, const char* name, const void* data) NJS_NOEXCEPT
-    : type(type),
-      flags(flags),
-      name(name),
-      data(data) {}
-
-  enum Type {
+  enum Type : uint32_t {
     kTypeInvalid = 0,
     kTypeStatic = 1,
     kTypeMethod = 2,
@@ -653,10 +668,20 @@ struct BindingItem {
     kTypeSetter = 4
   };
 
-  unsigned int type;         //!< Type of the item.
-  unsigned int flags;        //!< Flags.
-  const char* name;          //!< Name (function name, property name, etc...).
-  const void* data;          //!< Data (function pointer).
+  NJS_INLINE BindingItem(unsigned int type, unsigned int flags, const char* name, const void* data) noexcept
+    : type(type),
+      flags(flags),
+      name(name),
+      data(data) {}
+
+  //! Type of the item.
+  unsigned int type;
+  //! Flags.
+  unsigned int flags;
+  //! Name (function name, property name, etc...).
+  const char* name;
+  //! Data (native function pointer).
+  const void* data;
 };
 
 // ============================================================================
@@ -672,8 +697,8 @@ struct StaticData {
   // [Accessors]
   // --------------------------------------------------------------------------
 
-  NJS_INLINE const char* getTypeName(int type) const NJS_NOEXCEPT {
-    NJS_ASSERT(type >= 0 && type < kValueCount);
+  NJS_INLINE const char* typeNameOf(int type) const noexcept {
+    NJS_ASSERT(type >= 0 && type < Globals::kValueCount);
     return _typeName[type];
   }
 
@@ -681,7 +706,7 @@ struct StaticData {
   // [Members]
   // --------------------------------------------------------------------------
 
-  char _typeName[kValueCount][20];
+  char _typeName[Globals::kValueCount][20];
 };
 
 static const StaticData _staticData = {
@@ -756,12 +781,12 @@ struct ResultPayload {
   // ------------------------------------------------------------------------
 
   //! Get if this `ResultPayload` data is initialized.
-  NJS_INLINE bool isInitialized() const NJS_NOEXCEPT { return any.first != -1; }
+  NJS_INLINE bool isInitialized() const noexcept { return any.first != -1; }
 
   //! Has to be called to reset the content of payload. It resets only one
   //! member for efficiency. If this member is set then the payload is valid,
   //! otherwise it's invalid or not set.
-  NJS_INLINE void reset() NJS_NOEXCEPT {
+  NJS_INLINE void reset() noexcept {
     any.first  = static_cast<intptr_t>(-1);
     any.second = static_cast<intptr_t>(-1);
   }
@@ -770,8 +795,8 @@ struct ResultPayload {
   // [Accessors]
   // ------------------------------------------------------------------------
 
-  NJS_INLINE bool hasArgument() const NJS_NOEXCEPT { return value.argIndex != -1; }
-  NJS_INLINE bool hasValue() const NJS_NOEXCEPT { return any.second != -1; }
+  NJS_INLINE bool hasArgument() const noexcept { return value.argIndex != -1; }
+  NJS_INLINE bool hasValue() const noexcept { return any.second != -1; }
 
   // --------------------------------------------------------------------------
   // [Members]
@@ -813,7 +838,7 @@ struct ResultPayload {
   };
 
   //! Static buffer for temporary strings.
-  char staticBuffer[kMaxBufferSize];
+  char staticBuffer[Globals::kMaxBufferSize];
 };
 
 // ============================================================================
@@ -825,7 +850,7 @@ struct ResultPayload {
 //! reused by all VM backend.
 class ResultMixin {
 public:
-  NJS_INLINE ResultMixin() NJS_NOEXCEPT { _payload.reset(); }
+  NJS_INLINE ResultMixin() noexcept { _payload.reset(); }
 
   // ------------------------------------------------------------------------
   // [Throw Exception]
@@ -835,93 +860,93 @@ public:
   // [Invalid Value / Argument]
   // ------------------------------------------------------------------------
 
-  NJS_INLINE Result invalidValue() NJS_NOEXCEPT {
-    return kResultInvalidValue;
+  NJS_INLINE Result invalidValue() noexcept {
+    return Globals::kResultInvalidValue;
   }
 
-  NJS_INLINE Result invalidValueTypeId(uint32_t typeId) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidValueTypeId(uint32_t typeId) noexcept {
     _payload.value.typeId = typeId;
-    return kResultInvalidValueTypeId;
+    return Globals::kResultInvalidValueTypeId;
   }
 
-  NJS_INLINE Result invalidValueTypeName(const char* typeName) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidValueTypeName(const char* typeName) noexcept {
     _payload.value.typeName = typeName;
-    return kResultInvalidValueTypeName;
+    return Globals::kResultInvalidValueTypeName;
   }
 
-  NJS_INLINE Result invalidValueCustom(const char* message) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidValueCustom(const char* message) noexcept {
     _payload.value.message = message;
-    return kResultInvalidValueCustom;
+    return Globals::kResultInvalidValueCustom;
   }
 
-  NJS_INLINE Result invalidArgument() NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgument() noexcept {
     _payload.value.argIndex = -2;
-    return kResultInvalidValue;
+    return Globals::kResultInvalidValue;
   }
 
-  NJS_INLINE Result invalidArgument(unsigned int index) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgument(unsigned int index) noexcept {
     _payload.value.argIndex = static_cast<intptr_t>(index);
-    return kResultInvalidValue;
+    return Globals::kResultInvalidValue;
   }
 
-  NJS_INLINE Result invalidArgumentTypeId(unsigned int index, uint32_t typeId) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgumentTypeId(unsigned int index, uint32_t typeId) noexcept {
     _payload.value.argIndex = static_cast<intptr_t>(index);
     _payload.value.typeId = typeId;
-    return kResultInvalidValueTypeId;
+    return Globals::kResultInvalidValueTypeId;
   }
 
-  NJS_INLINE Result invalidArgumentTypeName(unsigned int index, const char* typeName) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgumentTypeName(unsigned int index, const char* typeName) noexcept {
     _payload.value.argIndex = static_cast<intptr_t>(index);
     _payload.value.typeName = typeName;
-    return kResultInvalidValueTypeName;
+    return Globals::kResultInvalidValueTypeName;
   }
 
-  NJS_INLINE Result invalidArgumentCustom(unsigned int index, const char* message) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgumentCustom(unsigned int index, const char* message) noexcept {
     _payload.value.argIndex = static_cast<intptr_t>(index);
     _payload.value.message = message;
-    return kResultInvalidValueCustom;
+    return Globals::kResultInvalidValueCustom;
   }
 
   // ------------------------------------------------------------------------
   // [Invalid Arguments Length]
   // ------------------------------------------------------------------------
 
-  NJS_INLINE Result invalidArgumentsLength() NJS_NOEXCEPT {
-    return kResultInvalidArgumentsLength;
+  NJS_INLINE Result invalidArgumentsLength() noexcept {
+    return Globals::kResultInvalidArgumentsLength;
   }
 
-  NJS_INLINE Result invalidArgumentsLength(unsigned int numArgs) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgumentsLength(unsigned int numArgs) noexcept {
     _payload.arguments.minArgs = static_cast<intptr_t>(numArgs);
     _payload.arguments.maxArgs = static_cast<intptr_t>(numArgs);
-    return kResultInvalidArgumentsLength;
+    return Globals::kResultInvalidArgumentsLength;
   }
 
-  NJS_INLINE Result invalidArgumentsRange(unsigned int minArgs, unsigned int maxArgs) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidArgumentsLength(unsigned int minArgs, unsigned int maxArgs) noexcept {
     _payload.arguments.minArgs = static_cast<intptr_t>(minArgs);
     _payload.arguments.maxArgs = static_cast<intptr_t>(maxArgs);
-    return kResultInvalidArgumentsLength;
+    return Globals::kResultInvalidArgumentsLength;
   }
 
   // ------------------------------------------------------------------------
   // [Invalid Construct-Call]
   // ------------------------------------------------------------------------
 
-  NJS_INLINE Result invalidConstructCall() NJS_NOEXCEPT {
-    return kResultInvalidConstructCall;
+  NJS_INLINE Result invalidConstructCall() noexcept {
+    return Globals::kResultInvalidConstructCall;
   }
 
-  NJS_INLINE Result invalidConstructCall(const char* className) NJS_NOEXCEPT {
+  NJS_INLINE Result invalidConstructCall(const char* className) noexcept {
     _payload.constructCall.className = className;
-    return kResultInvalidConstructCall;
+    return Globals::kResultInvalidConstructCall;
   }
 
-  NJS_INLINE Result abstractConstructCall() NJS_NOEXCEPT {
-    return kResultAbstractConstructCall;
+  NJS_INLINE Result abstractConstructCall() noexcept {
+    return Globals::kResultAbstractConstructCall;
   }
 
-  NJS_INLINE Result abstractConstructCall(const char* className) NJS_NOEXCEPT {
+  NJS_INLINE Result abstractConstructCall(const char* className) noexcept {
     _payload.constructCall.className = className;
-    return kResultAbstractConstructCall;
+    return Globals::kResultAbstractConstructCall;
   }
 
   // ------------------------------------------------------------------------
@@ -939,17 +964,17 @@ public:
 template<typename T>
 class Maybe {
 public:
-  NJS_INLINE Maybe() NJS_NOEXCEPT
+  NJS_INLINE Maybe() noexcept
     : _value(),
-      _result(kResultOk) {}
+      _result(Globals::kResultOk) {}
 
-  NJS_INLINE Maybe(Result result, const T& value) NJS_NOEXCEPT
+  NJS_INLINE Maybe(Result result, const T& value) noexcept
     : _value(value),
       _result(result) {}
 
-  NJS_INLINE bool isOk() const NJS_NOEXCEPT { return _result == kResultOk; }
-  NJS_INLINE const T& value() const NJS_NOEXCEPT { return _value; }
-  NJS_INLINE njs::Result result() const NJS_NOEXCEPT { return _result; }
+  NJS_INLINE bool isOk() const noexcept { return _result == Globals::kResultOk; }
+  NJS_INLINE const T& value() const noexcept { return _value; }
+  NJS_INLINE njs::Result result() const noexcept { return _result; }
 
   T _value;
   Result _result;
@@ -979,36 +1004,36 @@ static const UndefinedType Undefined = {};
 //! By default no implementation for `T` is provided, thus it would be compile
 //! time error if used with non-implemented type.
 template<typename T>
-NJS_INLINE Result resultOf(const T& in) NJS_NOEXCEPT;
+NJS_INLINE Result resultOf(const T& in) noexcept;
 
 template<>
-NJS_INLINE Result resultOf(const Result& in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(const Result& in) noexcept {
   // Provided for convenience.
   return in;
 }
 
 template<typename T>
-NJS_INLINE Result resultOf(T* in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(T* in) noexcept {
   // Null-pointer check, used after memory allocation or `new(std::nothrow)`.
-  return in ? kResultOk : kResultOutOfMemory;
+  return in ? Globals::kResultOk : Globals::kResultOutOfMemory;
 }
 
 template<typename T>
-NJS_INLINE Result resultOf(const T* in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(const T* in) noexcept {
   // The same as above, specialized for `const T*`.
-  return in ? kResultOk : kResultOutOfMemory;
+  return in ? Globals::kResultOk : Globals::kResultOutOfMemory;
 }
 
 template<typename T>
-NJS_INLINE Result resultOf(const Maybe<T>& in) NJS_NOEXCEPT {
+NJS_INLINE Result resultOf(const Maybe<T>& in) noexcept {
   // Just pass the result of Maybe<T> handle.
   return in.result();
 }
 
 // Part of the NJS-API - these must be provided by the engine and return
-// `kResultInvalidHandle` in case the handle is not valid.
+// `Globals::kResultInvalidHandle` in case the handle is not valid.
 template<>
-NJS_INLINE Result resultOf(const Value& in) NJS_NOEXCEPT;
+NJS_INLINE Result resultOf(const Value& in) noexcept;
 
 #define NJS_CHECK(...) \
   do { \
@@ -1017,6 +1042,97 @@ NJS_INLINE Result resultOf(const Value& in) NJS_NOEXCEPT;
       return result_; \
     } \
   } while (0)
+
+// ============================================================================
+// [njs::Internal::reportError]
+// ============================================================================
+
+namespace Internal {
+
+// NOTE: This is templated as to make it possible to be declared without knowing the `Context`.
+template<typename Context>
+static NJS_NOINLINE void reportError(Context& ctx, Result result, const ResultPayload& payload) noexcept {
+  unsigned int exceptionType = Globals::kExceptionError;
+  const StaticData& staticData = _staticData;
+
+  enum { kMsgSize = Globals::kMaxBufferSize };
+  char msgBuf[kMsgSize];
+  const char* msg = msgBuf;
+
+  if (result >= Globals::_kResultThrowFirst &&
+      result <= Globals::_kResultThrowLast) {
+    exceptionType = result;
+
+    if (!payload.isInitialized())
+      msg = "";
+    else
+      msg = const_cast<char*>(payload.error.message);
+  }
+  else if (result >= Globals::_kResultValueFirst &&
+           result <= Globals::_kResultValueLast) {
+    exceptionType = Globals::kExceptionTypeError;
+
+    char baseBuf[64];
+    const char* base = baseBuf;
+
+    intptr_t argIndex = payload.value.argIndex;
+    if (argIndex == -1)
+      base = "Invalid value";
+    else if (argIndex == -2)
+      base = "Invalid argument";
+    else
+      StrUtils::sformat(baseBuf, 64, "Invalid argument [%u]", static_cast<unsigned int>(argIndex));
+
+    if (result == Globals::kResultInvalidValueTypeId) {
+      const char* typeName = staticData.typeNameOf(payload.value.typeId);
+      StrUtils::sformat(msgBuf, kMsgSize, "%s: Expected Type '%s'", base, typeName);
+    }
+    else if (result == Globals::kResultInvalidValueTypeName) {
+      const char* typeName = payload.value.typeName;
+      StrUtils::sformat(msgBuf, kMsgSize, "%s: Expected Type '%s'", base, typeName);
+    }
+    else if (result == Globals::kResultInvalidValueCustom) {
+      StrUtils::sformat(msgBuf, kMsgSize, "%s: %s", base, payload.value.message);
+    }
+    else {
+      msg = base;
+    }
+  }
+  else if (result == Globals::kResultInvalidArgumentsLength) {
+    exceptionType = Globals::kExceptionTypeError;
+
+    int minArgs = static_cast<int>(payload.arguments.minArgs);
+    int maxArgs = static_cast<int>(payload.arguments.maxArgs);
+
+    if (minArgs == -1 || maxArgs == -1)
+      msg = "Invalid number of arguments: (unspecified)";
+    else if (minArgs == maxArgs)
+      StrUtils::sformat(msgBuf, kMsgSize, "Invalid number of arguments: Required exactly %d", minArgs);
+    else
+      StrUtils::sformat(msgBuf, kMsgSize, "Invalid number of arguments: Required between %d..%d", minArgs, maxArgs);
+  }
+  else if (result == Globals::kResultInvalidConstructCall ||
+           result == Globals::kResultAbstractConstructCall) {
+    exceptionType = Globals::kExceptionTypeError;
+
+    const char* className = "(anonymous)";
+    if (payload.isInitialized())
+      className = payload.constructCall.className;
+
+    const char* reason =
+      (result == Globals::kResultInvalidConstructCall)
+        ? "Use new operator"
+        : "Class is abstract";
+    StrUtils::sformat(msgBuf, kMsgSize, "Cannot instantiate '%s': %s", className, reason);
+  }
+  else {
+    msg = "Unknown error";
+  }
+
+  ctx.throwNewException(exceptionType, ctx.newString(Utf8Ref(msg)));
+}
+
+} // Internal namespace
 
 } // njs namespace
 

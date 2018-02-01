@@ -10,19 +10,19 @@
 namespace test {
 
 // ============================================================================
-// [test::ObjectWrap]
+// [test::NJSObject]
 // ============================================================================
 
-NJS_BIND_CLASS(ObjectWrap) {
+NJS_BIND_CLASS(NJSObject) {
   NJS_BIND_CONSTRUCTOR() {
     NJS_CHECK(ctx.verifyArgumentsLength(2));
 
-    // Get `a` and `b` arguments.
+    // Unpack `a` and `b` arguments.
     int a, b;
     NJS_CHECK(ctx.unpackArgument(0, a));
     NJS_CHECK(ctx.unpackArgument(1, b));
 
-    return ctx.returnNew<ObjectWrap>(a, b);
+    return ctx.returnNew<NJSObject>(a, b);
   }
 
   // --------------------------------------------------------------------------
@@ -30,18 +30,18 @@ NJS_BIND_CLASS(ObjectWrap) {
   // --------------------------------------------------------------------------
 
   NJS_BIND_GET(a) {
-    return ctx.returnValue(self->_obj.getA());
+    return ctx.returnValue(self->_obj.a());
   }
 
   NJS_BIND_SET(a) {
     int a;
     NJS_CHECK(ctx.unpackValue(a));
     self->_obj.setA(a);
-    return njs::kResultOk;
+    return njs::Globals::kResultOk;
   }
 
   NJS_BIND_GET(b) {
-    return ctx.returnValue(self->_obj.getB());
+    return ctx.returnValue(self->_obj.b());
   }
 
   // --------------------------------------------------------------------------
@@ -76,7 +76,7 @@ NJS_BIND_CLASS(ObjectWrap) {
 NJS_MODULE(test) {
   // TODO: This depends on V8.
   typedef v8::Local<v8::FunctionTemplate> FunctionSpec;
-  FunctionSpec ObjectSpec = NJS_INIT_CLASS(ObjectWrap, exports);
+  FunctionSpec ObjectSpec = NJS_INIT_CLASS(NJSObject, exports);
 }
 
 } // test namespace
