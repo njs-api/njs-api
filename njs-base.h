@@ -12,6 +12,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <new>
