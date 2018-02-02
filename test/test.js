@@ -52,8 +52,8 @@ function assertThrow(fn) {
 // ============================================================================
 
 test("Basic functionality", function(done) {
-  var Obj = native.Object;
-  var inst = new Obj(1, 2);
+  var NObj = native.Object;
+  var inst = new NObj(1, 2);
 
   assertEqual(inst.a, 1);
   assertEqual(inst.b, 2);
@@ -65,8 +65,8 @@ test("Basic functionality", function(done) {
   assertEqual(inst.a, 43);
   assertEqual(inst.b, 3);
 
-  // Should throw if `Obj` was called without using the new operator.
-  assertThrow(function() { Obj(1, 2); });
+  // Should throw if `NObj` was called without using the new operator.
+  assertThrow(function() { NObj(1, 2); });
 
   // Should throw if an invalid number (not int32) is passed to getter / method.
   assertThrow(function() { inst.a = NaN; });
@@ -91,8 +91,8 @@ test("Basic functionality", function(done) {
   // Should throw as `inst` has not a setter for `b`.
   assertThrow(function() { inst.b = 1; });
 
-  // Should call `Obj.staticMul()` (static method).
-  assertEqual(Obj.staticMul(21, 2), 42);
+  // Should call `NObj.staticMul()` (static method).
+  assertEqual(NObj.staticMul(21, 2), 42);
   assertEqual(inst.staticMul, undefined);
 
   done();
@@ -103,21 +103,27 @@ test("Basic functionality", function(done) {
 // ============================================================================
 
 test("Basic security (incompatible signature)", function(done) {
-  var Obj = native.Object;
+  var NObj = native.Object;
 
-  var inst = new Obj(1, 2);
+  var instA = new NObj(1, 2);
+  var instB = new NObj(2, 3);
+  var instC = new NObj(1, 2);
   var fake = {};
 
-  fake.add = inst.add;
+  assertEqual(instA.equals(instB), false);
+  assertEqual(instA.equals(instC), true);
+  assertThrow(function() { instA.equals(fake); });
+
+  fake.add = instA.add;
   assertThrow(function() { fake.add(1, 2); });
 
-  fake = { __proto__: inst };
+  fake = { __proto__: instA };
   assertThrow(function() { fake.add(1, 2); }); // Method.
   assertThrow(function() { fake.a; });         // Getter.
   assertThrow(function() { fake.a = 1; });     // Setter.
   assertThrow(function() { fake.b = 1; });     // Setter (read-only).
 
-  fake = { __proto__: Obj.prototype };
+  fake = { __proto__: NObj.prototype };
   assertThrow(function() { fake.add(1, 2); }); // Method.
 
   done();

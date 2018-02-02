@@ -15,10 +15,10 @@ namespace test {
 
 NJS_BIND_CLASS(NJSObject) {
   NJS_BIND_CONSTRUCTOR() {
-    NJS_CHECK(ctx.verifyArgumentsLength(2));
-
     // Unpack `a` and `b` arguments.
     int a, b;
+
+    NJS_CHECK(ctx.verifyArgumentsLength(2));
     NJS_CHECK(ctx.unpackArgument(0, a));
     NJS_CHECK(ctx.unpackArgument(1, b));
 
@@ -49,13 +49,22 @@ NJS_BIND_CLASS(NJSObject) {
   // --------------------------------------------------------------------------
 
   NJS_BIND_METHOD(add) {
-    NJS_CHECK(ctx.verifyArgumentsLength(1));
-
     int n;
-    NJS_CHECK(ctx.unpackArgument(0, n));
-    self->_obj.add(n);
 
+    NJS_CHECK(ctx.verifyArgumentsLength(1));
+    NJS_CHECK(ctx.unpackArgument(0, n));
+
+    self->_obj.add(n);
     return ctx.returnValue(ctx.This());
+  }
+
+  NJS_BIND_METHOD(equals) {
+    NJSObject* other;
+
+    NJS_CHECK(ctx.verifyArgumentsLength(1));
+    NJS_CHECK(ctx.unwrapArgument<NJSObject>(0, &other));
+
+    return ctx.returnValue(self->_obj.equals(other->_obj));
   }
 
   // --------------------------------------------------------------------------
@@ -63,9 +72,9 @@ NJS_BIND_CLASS(NJSObject) {
   // --------------------------------------------------------------------------
 
   NJS_BIND_STATIC(staticMul) {
-    NJS_CHECK(ctx.verifyArgumentsLength(2));
-
     int a, b;
+
+    NJS_CHECK(ctx.verifyArgumentsLength(2));
     NJS_CHECK(ctx.unpackArgument(0, a));
     NJS_CHECK(ctx.unpackArgument(1, b));
 

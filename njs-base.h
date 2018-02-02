@@ -848,7 +848,7 @@ struct ResultPayload {
 
 //! Result mixin, provides methods that can be used by `ExecutionContext`. The
 //! purpose of this mixin is to define methods that are generic and then simply
-//! reused by all VM backend.
+//! reused by all VM backends.
 class ResultMixin {
 public:
   NJS_INLINE ResultMixin() noexcept { _payload.reset(); }

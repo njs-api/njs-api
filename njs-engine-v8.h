@@ -88,6 +88,26 @@ NJS_INLINE Result resultOf(const Value& in) noexcept {
 // ============================================================================
 
 namespace Internal {
+  static NJS_INLINE uintptr_t nativeTagFromObjectTag(uint32_t objectTag) noexcept {
+    if (sizeof(uintptr_t) > sizeof(uint32_t))
+      return (uintptr_t(objectTag) << 34) | uintptr_t(0x00000002U);
+    else
+      return (uintptr_t(objectTag) <<  2) | uintptr_t(0x00000002U);
+  }
+
+  static NJS_INLINE uint32_t objectTagFromNativeTag(uintptr_t nativeTag) noexcept {
+    if (sizeof(uintptr_t) > sizeof(uint32_t))
+      return uint32_t(nativeTag >> 34);
+    else
+      return uint32_t(nativeTag >>  2);
+  }
+} // Internal namespace
+
+// ============================================================================
+// [njs::Internal::V8 Helpers]
+// ============================================================================
+
+namespace Internal {
   // V8 specific destroy callback.
   typedef void (*V8WrapDestroyCallback)(const v8::WeakCallbackInfo<void>& data);
 
@@ -229,8 +249,8 @@ namespace Internal {
     static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) noexcept {
       if (!in->IsNumber())
         return Globals::kResultInvalidValue;
-
-      return IntUtils::doubleToInt64(v8::Number::Cast(*in)->Value(), out);
+      else
+        return IntUtils::doubleToInt64(v8::Number::Cast(*in)->Value(), out);
     }
   };
 
@@ -252,8 +272,8 @@ namespace Internal {
     static NJS_INLINE Result unpack(Context& ctx, const v8::Local<v8::Value>& in, T& out) noexcept {
       if (!in->IsNumber())
         return Globals::kResultInvalidValue;
-
-      return IntUtils::doubleToUint64(v8::Number::Cast(*in)->Value(), out);
+      else
+        return IntUtils::doubleToUint64(v8::Number::Cast(*in)->Value(), out);
     }
   };
 
@@ -399,10 +419,13 @@ namespace Internal {
   }
 
   template<typename NativeT>
-  NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* self) noexcept;
+  NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* self, uint32_t objectTag) noexcept;
 
   template<typename NativeT>
-  NJS_INLINE NativeT* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) noexcept;
+  NJS_INLINE NativeT* v8UnwrapNativeUnsafe(Context& ctx, v8::Local<v8::Object> obj) noexcept;
+
+  template<typename NativeT>
+  NJS_INLINE Result v8UnwrapNativeChecked(Context& ctx, NativeT** pOut, v8::Local<v8::Value> obj, uint32_t objectTag) noexcept;
 } // Internal namespace
 
 // ============================================================================
@@ -411,7 +434,7 @@ namespace Internal {
 
 class Runtime {
 public:
-  NJS_INLINE Runtime() noexcept : _isolate(NULL) {}
+  NJS_INLINE Runtime() noexcept : _isolate(nullptr) {}
   NJS_INLINE Runtime(const Runtime& other) noexcept : _isolate(other._isolate) {}
   explicit NJS_INLINE Runtime(v8::Isolate* isolate) noexcept : _isolate(isolate) {}
 
@@ -710,7 +733,7 @@ public:
   NJS_INLINE int readUtf8(char* out, int size = -1) const noexcept {
     NJS_ASSERT(isValid());
     NJS_ASSERT(isString());
-    return v8Value<v8::String>()->WriteUtf8(out, size, NULL, v8::String::NO_NULL_TERMINATION);
+    return v8Value<v8::String>()->WriteUtf8(out, size, nullptr, v8::String::NO_NULL_TERMINATION);
   }
 
   NJS_INLINE int readUtf16(uint16_t* out, int size = -1) const noexcept {
@@ -899,9 +922,14 @@ public:
 
   template<typename NativeT>
   NJS_INLINE Result wrap(Value obj, NativeT* native) noexcept {
+    return wrap<NativeT>(obj, native, NativeT::kObjectTag);
+  }
+
+  template<typename NativeT>
+  NJS_INLINE Result wrap(Value obj, NativeT* native, uint32_t objectTag) noexcept {
     NJS_ASSERT(obj.isObject());
 
-    return Internal::v8WrapNative<NativeT>(*this, obj.v8HandleAs<v8::Object>(), native);
+    return Internal::v8WrapNative<NativeT>(*this, obj.v8HandleAs<v8::Object>(), native, objectTag);
   }
 
   template<typename NativeT, typename... ARGS>
@@ -912,14 +940,41 @@ public:
     if (!native)
       return Globals::kResultOutOfMemory;
 
-    return Internal::v8WrapNative<NativeT>(*this, obj.v8HandleAs<v8::Object>(), native);
+    return Internal::v8WrapNative<NativeT>(*this, obj.v8HandleAs<v8::Object>(), native, NativeT::kObjectTag);
   }
 
   template<typename NativeT>
-  NJS_INLINE NativeT* unwrap(Value obj) noexcept {
+  NJS_INLINE NativeT* unwrapUnsafe(Value obj) noexcept {
     NJS_ASSERT(obj.isValid());
     NJS_ASSERT(obj.isObject());
-    return Internal::v8UnwrapNative<NativeT>(*this, obj.v8HandleAs<v8::Object>());
+    return Internal::v8UnwrapNativeUnsafe<NativeT>(*this, obj.v8HandleAs<v8::Object>());
+  }
+
+  template<typename NativeT>
+  NJS_INLINE Result unwrap(NativeT** pOut, Value obj) noexcept {
+    return Internal::v8UnwrapNativeChecked(*this, pOut, obj, NativeT::kObjectTag);
+  }
+
+  template<typename NativeT>
+  NJS_INLINE Result unwrap(NativeT** pOut, Value obj, uint32_t objectTag) noexcept {
+    return Internal::v8UnwrapNativeChecked(*this, pOut, obj, objectTag);
+  }
+
+  NJS_INLINE bool isWrapped(Value obj, uint32_t objectTag) noexcept {
+    // This must be checked before.
+    NJS_ASSERT(obj.isValid());
+
+    if (!obj.isObject())
+      return false;
+
+    v8::Local<v8::Object> handle = obj.v8HandleAs<v8::Object>();
+    return handle->InternalFieldCount() > 1 &&
+           (uintptr_t)handle->GetAlignedPointerFromInternalField(1) == Internal::nativeTagFromObjectTag(objectTag);
+  }
+
+  template<typename NativeT>
+  NJS_INLINE bool isWrapped(Value obj) noexcept {
+    return isWrapped(obj, NativeT::kObjectTag);
   }
 
   // --------------------------------------------------------------------------
@@ -1062,7 +1117,7 @@ public:
   }
 
   NJS_INLINE Value call(const Value& function, const Value& recv) noexcept {
-    return callArgv(function, recv, 0, NULL);
+    return callArgv(function, recv, 0, nullptr);
   }
 
   template<typename... ARGS>
@@ -1377,7 +1432,13 @@ public:
     return Value(_info.operator[](static_cast<int>(index)));
   }
 
-  // Like `unpack()`, but accepts the argument index instead of the `Value`.
+  // Like `unwrap()`, but accepts an argument index instead of `Value`.
+  template<typename NativeT>
+  NJS_INLINE Result unwrapArgument(unsigned int index, NativeT** pOut) noexcept {
+    return Internal::v8UnwrapNativeChecked<NativeT>(*this, pOut, _info[static_cast<int>(index)], NativeT::kObjectTag);
+  }
+
+  // Like `unpack()`, but accepts an argument index instead of `Value`.
   template<typename T>
   NJS_INLINE Result unpackArgument(unsigned int index, T& out) noexcept {
     return Internal::v8UnpackValue<T>(*this, _info[static_cast<int>(index)], out);
@@ -1460,7 +1521,7 @@ public:
   NJS_INLINE WrapData() noexcept
     : _refCount(0),
       _object(),
-      _destroyCallback(NULL) {}
+      _destroyCallback(nullptr) {}
 
   NJS_INLINE WrapData(Context& ctx, Value obj, Internal::V8WrapDestroyCallback destroyCallback) noexcept
     : _refCount(0),
@@ -1569,32 +1630,50 @@ public:
 
 namespace Internal {
   template<typename NativeT>
-  NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* native) noexcept {
+  NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* native, uint32_t objectTag) noexcept {
     // Should be never called on an already initialized data.
     NJS_ASSERT(!native->_wrapData._object.isValid());
     NJS_ASSERT(!native->_wrapData._destroyCallback);
 
     // Ensure the object was properly configured and contains internal fields.
-    NJS_ASSERT(obj->InternalFieldCount() > 0);
+    NJS_ASSERT(obj->InternalFieldCount() > 1);
 
     native->_wrapData._object._handle.Reset(ctx.v8Isolate(), obj);
     native->_wrapData._destroyCallback =(Internal::V8WrapDestroyCallback)(WrapData::destroyCallbackT<NativeT>);
 
     obj->SetAlignedPointerInInternalField(0, native);
-    native->_wrapData.makeWeak(native);
+    obj->SetAlignedPointerInInternalField(1, (void*)Internal::nativeTagFromObjectTag(objectTag));
 
+    native->_wrapData.makeWeak(native);
     return Globals::kResultOk;
   }
 
   template<typename NativeT>
-  NJS_INLINE NativeT* v8UnwrapNative(Context& ctx, v8::Local<v8::Object> obj) noexcept {
-    NJS_ASSERT(obj->InternalFieldCount() > 0);
+  NJS_INLINE NativeT* v8UnwrapNativeUnsafe(Context& ctx, v8::Local<v8::Object> obj) noexcept {
+    NJS_ASSERT(obj->InternalFieldCount() > 1);
 
-    // Cast to `NativeT::Base` before casting to `NativeT*`. A direct cast from
-    // `void*` to `NativeT` won't work right when `NativeT` has more than one
-    // base class.
-    void* native = obj->GetAlignedPointerFromInternalField(0);
-    return static_cast<NativeT*>(static_cast<typename NativeT::Base*>(native));
+    void* nativeObj = obj->GetAlignedPointerFromInternalField(0);
+    return static_cast<NativeT*>(static_cast<typename NativeT::Base*>(nativeObj));
+  }
+
+  template<typename NativeT>
+  NJS_INLINE Result v8UnwrapNativeChecked(Context& ctx, NativeT** pOut, v8::Local<v8::Value> value, uint32_t objectTag) noexcept {
+    *pOut = nullptr;
+    if (!value->IsObject())
+      return Globals::kResultInvalidValue;
+
+    v8::Local<v8::Object> obj = v8::Local<v8::Object>::Cast(value);
+    if (obj->InternalFieldCount() < 2)
+      return Globals::kResultInvalidValue;
+
+    void* nativeObj = obj->GetAlignedPointerFromInternalField(0);
+    uintptr_t nativeTag = (uintptr_t)obj->GetAlignedPointerFromInternalField(1);
+
+    if (nativeTag != Internal::nativeTagFromObjectTag(objectTag))
+      return Globals::kResultInvalidValue;
+
+    *pOut = static_cast<NativeT*>(static_cast<typename NativeT::Base*>(nativeObj));
+    return Globals::kResultOk;
   }
 
   static NJS_NOINLINE Result v8BindClassHelper(
@@ -1643,8 +1722,8 @@ namespace Internal {
           unsigned int pairedType;
           int attr = v8::DontEnum | v8::DontDelete;
 
-          v8::AccessorGetterCallback getter = NULL;
-          v8::AccessorSetterCallback setter = NULL;
+          v8::AccessorGetterCallback getter = nullptr;
+          v8::AccessorSetterCallback setter = nullptr;
 
           if (item.type == BindingItem::kTypeGetter) {
             getter = (v8::AccessorGetterCallback)item.data;
@@ -1657,14 +1736,14 @@ namespace Internal {
 
           const BindingItem& nextItem = items[i + 1];
           if (count - i > 1 && nextItem.type == pairedType && std::strcmp(item.name, nextItem.name) == 0) {
-            if (getter == NULL)
+            if (!getter)
               getter = (v8::AccessorGetterCallback)nextItem.data;
             else
               setter = (v8::AccessorSetterCallback)nextItem.data;
             i++;
           }
 
-          if (getter == NULL) {
+          if (!getter) {
             // TODO: Don't know what to do here...
             NJS_ASSERT(!"NJS_BIND_SET() used without having a getter before or after it!");
             ::abort();
@@ -1674,7 +1753,7 @@ namespace Internal {
           if (accessorSignature.IsEmpty())
             accessorSignature = v8::AccessorSignature::New(ctx.v8Isolate(), classObj);
 
-          if (setter == NULL)
+          if (!setter)
             attr |= v8::ReadOnly;
 
           prototype->SetAccessor(
@@ -1711,7 +1790,7 @@ namespace Internal {
 
       Value className = ctx.newInternalizedString(Latin1Ref(Type::staticClassName()));
       classObj->SetClassName(className.v8HandleAs<v8::String>());
-      classObj->InstanceTemplate()->SetInternalFieldCount(1);
+      classObj->InstanceTemplate()->SetInternalFieldCount(2);
 
       // Type::Bindings is in fact an array of `BindingItem`s.
       typename Type::Bindings bindingItems;
@@ -1850,10 +1929,12 @@ namespace Node {
 // [NJS_CLASS - Declarative Interface]
 // ============================================================================
 
-#define NJS_BASE_CLASS(SELF, CLASS_NAME)                                      \
+#define NJS_BASE_CLASS(SELF, CLASS_NAME, TAG)                                 \
 public:                                                                       \
   typedef SELF Type;                                                          \
   typedef SELF Base;                                                          \
+                                                                              \
+  enum : uint32_t { kObjectTag = TAG };                                       \
                                                                               \
   struct Bindings;                                                            \
   friend struct Bindings;                                                     \
@@ -1891,7 +1972,7 @@ public:                                                                       \
 
 // NOTE: All of these functions use V8 signatures to ensure that `This()`
 // points to a correct object. This means that it's safe to directly use
-// `Internal::v8UnwrapNative<>`.
+// `Internal::v8UnwrapNativeUnchecked<>`.
 
 #define NJS_BIND_CLASS(SELF) \
   struct SELF::Bindings : public ::njs::Internal::V8ClassBindings< SELF >
@@ -1952,7 +2033,8 @@ public:                                                                       \
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) noexcept {       \
                                                                               \
     ::njs::FunctionCallContext ctx(::njs::Internal::pass(info));              \
-    Type* self = ::njs::Internal::v8UnwrapNative<Type>(ctx, ctx._info.This());\
+    Type* self = ::njs::Internal::v8UnwrapNativeUnsafe<Type>(                 \
+      ctx, ctx._info.This());                                                 \
     ctx._handleResult(MethodImpl_##NAME(ctx, self));                          \
   }                                                                           \
                                                                               \
@@ -1970,7 +2052,8 @@ public:                                                                       \
       const ::v8::PropertyCallbackInfo< ::v8::Value >& info) noexcept {       \
                                                                               \
     ::njs::GetPropertyContext ctx(::njs::Internal::pass(info));               \
-    Type* self = ::njs::Internal::v8UnwrapNative<Type>(ctx, ctx._info.This());\
+    Type* self = ::njs::Internal::v8UnwrapNativeUnsafe<Type>(                 \
+      ctx, ctx._info.This());                                                 \
     ctx._handleResult(GetImpl_##NAME(ctx, self));                             \
   }                                                                           \
                                                                               \
@@ -1992,7 +2075,8 @@ public:                                                                       \
       ::njs::Internal::pass(info),                                            \
       ::njs::Internal::pass(value));                                          \
                                                                               \
-    Type* self = ::njs::Internal::v8UnwrapNative<Type>(ctx, ctx._info.This());\
+    Type* self = ::njs::Internal::v8UnwrapNativeUnsafe<Type>(                 \
+      ctx, ctx._info.This());                                                 \
     ctx._handleResult(SetImpl_##NAME(ctx, self));                             \
   }                                                                           \
                                                                               \

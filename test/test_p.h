@@ -60,6 +60,10 @@ public:
     _b += n;
   }
 
+  NJS_INLINE bool equals(const Object& other) noexcept {
+    return _a == other._a && _b == other._b;
+  }
+
   // --------------------------------------------------------------------------
   // [Statics]
   // --------------------------------------------------------------------------
@@ -80,7 +84,7 @@ public:
 // A wrapped class.
 class NJSObject {
 public:
-  NJS_BASE_CLASS(NJSObject, "Object")
+  NJS_BASE_CLASS(NJSObject, "Object", 0xFF)
 
   NJS_INLINE NJSObject(int a, int b) noexcept
     : _obj(a, b) {}
