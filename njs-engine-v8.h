@@ -135,7 +135,7 @@ namespace Internal {
   // specialization uses a different V8 constructor. The `type` argument
   // matches V8's `NewStringType` and can be used to create internalized strings.
   template<typename StrRef>
-  NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const StrRef& str, v8::NewStringType type) noexcept;
+  NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const StrRef& str, v8::NewStringType type) noexcept = delete;
 
   template<>
   NJS_INLINE v8::Local<v8::Value> v8NewString(Context& ctx, const Latin1Ref& str, v8::NewStringType type) noexcept {
@@ -828,7 +828,7 @@ public:
 
 class Context {
   // No assignment.
-  NJS_INLINE Context& operator=(const Context& other) noexcept;
+  NJS_INLINE Context& operator=(const Context& other) noexcept = delete;
 
 public:
   NJS_INLINE Context() noexcept {}
@@ -877,6 +877,7 @@ public:
   NJS_INLINE Value newUint32(uint32_t value) noexcept { return Value(v8::Integer::New(v8Isolate(), value)); }
   NJS_INLINE Value newDouble(double value) noexcept { return Value(v8::Number::New(v8Isolate(), value)); }
   NJS_INLINE Value newArray() noexcept { return Value(v8::Array::New(v8Isolate())); }
+  NJS_INLINE Value newArray(uint32_t size) noexcept { return Value(v8::Array::New(v8Isolate(), int(size))); }
   NJS_INLINE Value newObject() noexcept { return Value(v8::Object::New(v8Isolate())); }
 
   template<typename StrRefT>

@@ -31,7 +31,8 @@ namespace njs {
 
 namespace Internal {
   namespace EnumUtils {
-    static const unsigned int kEnumNotFound = ~static_cast<unsigned int>(0);
+    static const constexpr char kAltEnumMarker = '@';
+    static const constexpr unsigned int kEnumNotFound = ~static_cast<unsigned int>(0);
 
     static NJS_INLINE bool isIgnorableChar(unsigned int c) noexcept {
       return c == '-';
@@ -53,9 +54,16 @@ namespace Internal {
       unsigned int cbFirst = in[0];
 
       for (unsigned int index = 0; ; index++) {
-        // NULL record indicates the end of the data.
+        // NULL record indicates end of data.
         ca = static_cast<uint8_t>(*pa++);
         if (!ca) return kEnumNotFound;
+
+        // Enum can contain alternative strings that describe the same value,
+        // so make sure we won't increment if we just parsed the notation.
+        if (ca == kAltEnumMarker) {
+          ca = static_cast<uint8_t>(*pa++);
+          index--;
+        }
 
         if (ca == cbFirst) {
           const CharType* pb = in;
@@ -91,13 +99,19 @@ L_End:
       const char* p = enumData;
 
       while (i != index) {
-        // NULL record indicates the end of the data.
-        if (!*p) return kEnumNotFound;
+        // NULL record indicates end of data.
+        if (!*p)
+          return kEnumNotFound;
 
+        // Only increment if this is not an alternative string.
+        i += *p != kAltEnumMarker;
+
+        // Skip the current string.
         while (*++p)
           continue;
-        p++; // Skip the NULL terminator of this record.
-        i++; // Increment the current index.
+
+        // Skip the NULL terminator of this record.
+        p++;
       }
 
       CharType* pData = data;

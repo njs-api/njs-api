@@ -1,7 +1,7 @@
 Neutral JS
 ==========
 
-  * [Official Repository (kobalicek/njs)](https://github.com/kobalicek/njs)
+  * [Official Repository (neutraljs/njs)](https://github.com/neutraljs/njs)
   * [Public Domain](./LICENSE.md)
 
 Introduction
