@@ -90,9 +90,9 @@ NJS_INLINE Result resultOf(const Value& in) noexcept {
 namespace Internal {
   static NJS_INLINE uintptr_t nativeTagFromObjectTag(uint32_t objectTag) noexcept {
     if (sizeof(uintptr_t) > sizeof(uint32_t))
-      return (uintptr_t(objectTag) << 34) | uintptr_t(0x00000002U);
+      return (uintptr_t(objectTag) << 34) | uintptr_t(0x00000002u);
     else
-      return (uintptr_t(objectTag) <<  2) | uintptr_t(0x00000002U);
+      return (uintptr_t(objectTag) <<  2) | uintptr_t(0x00000002u);
   }
 
   static NJS_INLINE uint32_t objectTagFromNativeTag(uintptr_t nativeTag) noexcept {
