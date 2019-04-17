@@ -233,8 +233,8 @@ namespace Internal {
       // because of `size_t` and similar types. These types will hardly contain
       // value that is only representable as `int64_t` so we prefer this path
       // that creates a JavaScript integer, which can be then optimized by V8.
-      if (in >= static_cast<T>(TypeTraits<int32_t>::minValue()) &&
-          in <= static_cast<T>(TypeTraits<int32_t>::maxValue())) {
+      if (in >= static_cast<T>(std::numeric_limits<int32_t>::lowest()) &&
+          in <= static_cast<T>(std::numeric_limits<int32_t>::max())) {
         out = v8::Integer::New(v8IsolateOfContext(ctx), static_cast<int32_t>(in));
       }
       else {
@@ -410,13 +410,7 @@ namespace Internal {
   }
 
   template<typename T, typename Concept>
-  NJS_INLINE Result v8ReturnWithConcept(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value, const Concept& concept) noexcept {
-    Value intermediate;
-    NJS_CHECK(V8ConvertWithConceptImpl<T, Concept, Concept::kConceptType>::pack(ctx, value, intermediate, concept));
-
-    rv.Set(v8HandleOfValue(intermediate));
-    return Globals::kResultOk;
-  }
+  NJS_INLINE Result v8ReturnWithConcept(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value, const Concept& concept) noexcept;
 
   template<typename NativeT>
   NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* self, uint32_t objectTag) noexcept;
@@ -537,7 +531,7 @@ public:
     return _handle->IsFalse();
   }
 
-  NJS_INLINE bool isI32() const noexcept {
+  NJS_INLINE bool isInt32() const noexcept {
     NJS_ASSERT(isValid());
     return _handle->IsInt32();
   }
@@ -663,95 +657,6 @@ public:
   }
 
   // --------------------------------------------------------------------------
-  // [Casting]
-  // --------------------------------------------------------------------------
-
-  // IMPORTANT: These can only be called if the value can be casted to such types,
-  // casting improper type will fail assertion in debug mode and cause apocalypse
-  // in release mode.
-
-  NJS_INLINE bool boolValue() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isBool());
-    return v8Value<v8::Boolean>()->BooleanValue();
-  }
-
-  NJS_INLINE int32_t int32Value() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isI32());
-    return v8Value<v8::Int32>()->Value();
-  }
-
-  NJS_INLINE uint32_t uint32Value() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isUint32());
-    return v8Value<v8::Uint32>()->Value();
-  }
-
-  NJS_INLINE double doubleValue() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isNumber());
-    return v8Value<v8::Number>()->Value();
-  }
-
-  // --------------------------------------------------------------------------
-  // [String-Specific Functionality]
-  // --------------------------------------------------------------------------
-
-  NJS_INLINE bool isLatin1() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->ContainsOnlyOneByte();
-  }
-
-  NJS_INLINE bool isLatin1Guess() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->IsOneByte();
-  }
-
-  // Length of the string if represented as UTF-16 or LATIN-1 (if representable).
-  NJS_INLINE size_t stringLength() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->Length();
-  }
-
-  // Length of the string if represented as UTF-8.
-  NJS_INLINE size_t utf8Length() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->Utf8Length();
-  }
-
-  NJS_INLINE int readLatin1(char* out, int size = -1) const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->WriteOneByte(reinterpret_cast<uint8_t*>(out), 0, size, v8::String::NO_NULL_TERMINATION);
-  }
-
-  NJS_INLINE int readUtf8(char* out, int size = -1) const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->WriteUtf8(out, size, nullptr, v8::String::NO_NULL_TERMINATION);
-  }
-
-  NJS_INLINE int readUtf16(uint16_t* out, int size = -1) const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isString());
-    return v8Value<v8::String>()->Write(out, 0, size, v8::String::NO_NULL_TERMINATION);
-  }
-
-  // --------------------------------------------------------------------------
-  // [Array Functionality]
-  // --------------------------------------------------------------------------
-
-  NJS_INLINE size_t arrayLength() const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isArray());
-    return v8Value<v8::Array>()->Length();
-  }
-  // --------------------------------------------------------------------------
   // [Members]
   // --------------------------------------------------------------------------
 
@@ -796,10 +701,12 @@ public:
     return reinterpret_cast<const v8::Persistent<T>&>(_handle);
   }
 
+  /*
   template<typename T = v8::Value>
   NJS_INLINE T* v8Value() const noexcept {
     return T::Cast(*_handle);
   }
+  */
 
   // --------------------------------------------------------------------------
   // [Handle]
@@ -979,7 +886,43 @@ public:
   }
 
   // --------------------------------------------------------------------------
-  // [JS Features]
+  // [Value]
+  // --------------------------------------------------------------------------
+
+  // IMPORTANT: These can only be called if the value can be casted to such types,
+  // casting improper type will fail assertion in debug mode and cause apocalypse
+  // in release mode.
+
+  NJS_INLINE bool boolValue(const Value& value) noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isBool());
+    v8::Maybe<bool> result = value._handle->BooleanValue(_context);
+    return result.FromMaybe(false);
+  }
+
+  NJS_INLINE int32_t int32Value(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isInt32());
+    v8::Maybe<int32_t> result = value._handle->Int32Value(_context);
+    return result.FromMaybe(0);
+  }
+
+  NJS_INLINE uint32_t uint32Value(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isUint32());
+    v8::Maybe<uint32_t> result = value._handle->Uint32Value(_context);
+    return result.FromMaybe(0);
+  }
+
+  NJS_INLINE double doubleValue(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isDouble());
+    v8::Maybe<double> result = value._handle->NumberValue(_context);
+    return result.FromMaybe(std::numeric_limits<double>::quiet_NaN());
+  }
+
+  // --------------------------------------------------------------------------
+  // [Language]
   // --------------------------------------------------------------------------
 
   NJS_INLINE Maybe<bool> equals(const Value& aAny, const Value& bAny) noexcept {
@@ -1002,6 +945,54 @@ public:
     return aAny._handle->SameValue(bAny._handle);
   }
 
+  // --------------------------------------------------------------------------
+  // [String]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE bool isLatin1(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->ContainsOnlyOneByte();
+  }
+
+  NJS_INLINE bool isLatin1Guess(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->IsOneByte();
+  }
+
+  // Length of the string if represented as UTF-16 or LATIN-1 (if representable).
+  NJS_INLINE size_t stringLength(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->Length();
+  }
+
+  // Length of the string if represented as UTF-8.
+  NJS_INLINE size_t utf8Length(const Value& value) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->Utf8Length(v8Isolate());
+  }
+
+  NJS_INLINE int readLatin1(const Value& value, char* out, int size = -1) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->WriteOneByte(v8Isolate(), reinterpret_cast<uint8_t*>(out), 0, size, v8::String::NO_NULL_TERMINATION);
+  }
+
+  NJS_INLINE int readUtf8(const Value& value, char* out, int size = -1) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->WriteUtf8(v8Isolate(), out, size, nullptr, v8::String::NO_NULL_TERMINATION);
+  }
+
+  NJS_INLINE int readUtf16(const Value& value, uint16_t* out, int size = -1) const noexcept {
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isString());
+    return value.v8Value<v8::String>()->Write(v8Isolate(), out, 0, size, v8::String::NO_NULL_TERMINATION);
+  }
+
   // Concatenate two strings.
   NJS_INLINE Value concatStrings(const Value& aStr, const Value& bStr) noexcept {
     NJS_ASSERT(aStr.isValid());
@@ -1009,11 +1000,22 @@ public:
     NJS_ASSERT(bStr.isValid());
     NJS_ASSERT(bStr.isString());
 
-    return Value(
-      v8::String::Concat(
-        aStr.v8HandleAs<v8::String>(),
-        bStr.v8HandleAs<v8::String>()));
+    return Value(v8::String::Concat(v8Isolate(), aStr.v8HandleAs<v8::String>(), bStr.v8HandleAs<v8::String>()));
   }
+
+  // --------------------------------------------------------------------------
+  // [Array]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE size_t arrayLength(const Value& value) const noexcept {
+    NJS_ASSERT(isValid());
+    NJS_ASSERT(isArray());
+    return value.v8Value<v8::Array>()->Length();
+  }
+
+  // --------------------------------------------------------------------------
+  // [Object]
+  // --------------------------------------------------------------------------
 
   NJS_INLINE Maybe<bool> hasProperty(const Value& obj, const Value& key) noexcept {
     NJS_ASSERT(obj.isValid());
@@ -1116,6 +1118,10 @@ public:
           static_cast<int>(argc),
           const_cast<v8::Local<v8::Value>*>(reinterpret_cast<const v8::Local<v8::Value>*>(argv)))));
   }
+
+  // --------------------------------------------------------------------------
+  // [Call]
+  // --------------------------------------------------------------------------
 
   NJS_INLINE Value call(const Value& function, const Value& recv) noexcept {
     return callArgv(function, recv, 0, nullptr);
@@ -1630,6 +1636,15 @@ public:
 // ============================================================================
 
 namespace Internal {
+  template<typename T, typename Concept>
+  NJS_INLINE Result v8ReturnWithConcept(Context& ctx, v8::ReturnValue<v8::Value>& rv, const T& value, const Concept& concept) noexcept {
+    Value intermediate;
+    NJS_CHECK(V8ConvertWithConceptImpl<T, Concept, Concept::kConceptType>::pack(ctx, value, intermediate, concept));
+
+    rv.Set(v8HandleOfValue(intermediate));
+    return Globals::kResultOk;
+  }
+
   template<typename NativeT>
   NJS_INLINE Result v8WrapNative(Context& ctx, v8::Local<v8::Object> obj, NativeT* native, uint32_t objectTag) noexcept {
     // Should be never called on an already initialized data.

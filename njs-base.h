@@ -15,6 +15,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <new>
 #include <utility>
 
@@ -329,21 +330,14 @@ template<> struct TypeTraits<Latin1Ref> : public BaseTraits<Latin1Ref, Globals::
 template<> struct TypeTraits<Utf8Ref  > : public BaseTraits<Utf8Ref  , Globals::kTraitIdStrRef> {};
 template<> struct TypeTraits<Utf16Ref > : public BaseTraits<Utf16Ref , Globals::kTraitIdStrRef> {};
 
-#define NJS_INT_TRAITS(T)                                                     \
-template<>                                                                    \
-struct TypeTraits<T> : public BaseTraits<T, IsSignedIntType<T>::kValue        \
-  ? (sizeof(T) < 8 ? Globals::kTraitIdSafeInt  : Globals::kTraitIdUnsafeInt ) \
+#define NJS_INT_TRAITS(T)                                                       \
+template<>                                                                      \
+struct TypeTraits<T> : public BaseTraits<T, IsSignedIntType<T>::kValue          \
+  ? (sizeof(T) < 8 ? Globals::kTraitIdSafeInt  : Globals::kTraitIdUnsafeInt )   \
   : (sizeof(T) < 8 ? Globals::kTraitIdSafeUint : Globals::kTraitIdUnsafeUint) > \
-{                                                                             \
-  static NJS_INLINE T minValue() noexcept {                                   \
-    return kIsSigned ? static_cast<T>(1) << (sizeof(T) * 8 - 1)               \
-                     : static_cast<T>(0);                                     \
-  }                                                                           \
-                                                                              \
-  static NJS_INLINE T maxValue() noexcept {                                   \
-    return kIsSigned ? ~static_cast<T>(0) ^ minValue()                        \
-                     : ~static_cast<T>(0);                                    \
-  }                                                                           \
+{                                                                               \
+  static NJS_INLINE T minValue() noexcept { return std::numeric_limits<T>::lowest(); } \
+  static NJS_INLINE T maxValue() noexcept { return std::numeric_limits<T>::max(); } \
 }
 
 NJS_INT_TRAITS(char);
@@ -391,8 +385,8 @@ struct IntCastImpl<In, Out, 1, 0> {
 template<typename In, typename Out>
 struct IntCastImpl<In, Out, 1, 1> {
   static NJS_INLINE Result op(In in, Out& out) noexcept {
-    if (in < static_cast<In>(Internal::TypeTraits<Out>::minValue()) ||
-        in > static_cast<In>(Internal::TypeTraits<Out>::maxValue()) )
+    if (in < static_cast<In>(std::numeric_limits<Out>::lowest()) ||
+        in > static_cast<In>(std::numeric_limits<Out>::max()) )
       return Globals::kResultInvalidValue;
 
     out = static_cast<Out>(in);

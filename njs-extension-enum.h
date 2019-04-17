@@ -161,9 +161,9 @@ struct Enum {
       return Globals::kResultInvalidValue;
 
     uint16_t content[Globals::kMaxEnumSize];
-    int size = in.stringLength();
+    int size = ctx.stringLength(in);
 
-    if (size <= 0 || size > int(Globals::kMaxEnumSize) || in.readUtf16(content, size) < size)
+    if (size <= 0 || size > int(Globals::kMaxEnumSize) || ctx.readUtf16(in, content, size) < size)
       return Globals::kResultInvalidValue;
 
     unsigned int index = Internal::EnumUtils::parse<uint16_t>(content, size, data());
