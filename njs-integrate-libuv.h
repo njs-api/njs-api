@@ -9,7 +9,7 @@
 #define _NJS_INTEGRATE_LIBUV_H
 
 // [Dependencies]
-#include "./njs.h"
+#include "./njs-api.h"
 #include <uv.h>
 
 namespace njs {

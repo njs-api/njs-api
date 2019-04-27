@@ -816,6 +816,13 @@ public:
     return Value(
       Internal::v8LocalFromMaybe<v8::Function>(
         v8::Function::New(v8Context(), nativeFunction, data.v8Handle(), 0, v8::ConstructorBehavior::kThrow)));
+
+    //v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
+    //  ctx.v8Isolate(), (v8::FunctionCallback)item.data, data);
+    //NJS_CHECK(fnTemplate);
+
+    //if (name.isValid())
+    //  fnTemplate->SetClassName(name.v8HandleAs<v8::String>());
   }
 
   // --------------------------------------------------------------------------
@@ -1749,14 +1756,10 @@ namespace Internal {
 
       switch (item.type) {
         case BindingItem::kTypeStatic: {
-          Value fn = ctx.newFunction((NativeFunction)item.data, exports);
-          NJS_CHECK(fn);
-
-          ctx.setFunctionName(fn, name);
-          //v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
-          //  ctx.v8Isolate(), (v8::FunctionCallback)item.data, exports);
-          // fnTemplate->SetName(name);
-          classObj->Set(name.v8HandleAs<v8::String>(), fn.v8HandleAs<v8::Function>());
+          v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
+            ctx.v8Isolate(), (v8::FunctionCallback)item.data, exports.v8HandleAs<v8::Value>());
+          fnTemplate->SetClassName(name.v8HandleAs<v8::String>());
+          classObj->Set(name.v8HandleAs<v8::String>(), fnTemplate);
           break;
         }
 

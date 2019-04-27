@@ -14,7 +14,7 @@
   "targets": [{
     "target_name": "njs-test",
     "sources": [
-      "njs.h",
+      "njs-api.h",
       "njs-base.h",
       "njs-engine-sm.h",
       "njs-engine-v8.h",

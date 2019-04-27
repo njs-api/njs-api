@@ -10,7 +10,7 @@
 
 // [Dependencies]
 #include <stdio.h>
-#include "../njs.h"
+#include "../njs-api.h"
 
 namespace test {
 

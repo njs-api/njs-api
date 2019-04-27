@@ -13,7 +13,7 @@
 #define _NJS_EXTENSION_ENUM_H
 
 // [Dependencies]
-#include "./njs.h"
+#include "./njs-api.h"
 
 namespace njs {
 

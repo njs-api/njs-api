@@ -1,5 +1,5 @@
-Neutral JS
-==========
+NJS API
+=======
 
   * [Official Repository (neutraljs/njs)](https://github.com/neutraljs/njs)
   * [Public Domain](./LICENSE.md)
@@ -21,7 +21,7 @@ Features:
 Disclaimer
 ----------
 
-NJS is a WORK-IN-PROGRESS that has been published to validate the initial ideas and to design the API with more people. The library started as a separate project when developing [b2d-js](https://github.com/blend2d/b2d-node) to make bindings easier to write, easier to maintain, and also more secure.
+NJS is a WORK-IN-PROGRESS that has been published to validate the initial ideas and to design the API with more people. The library started as a separate project when developing [blend2d-js](https://github.com/blend2d/b2djs) to make bindings easier to write, easier to maintain, and also more secure.
 
 TODO
 ----
