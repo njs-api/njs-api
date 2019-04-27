@@ -1,31 +1,25 @@
 {
   "name": "njs-api",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "license": "Unlicense",
-
   "description": "Nautral JavaScript Interface",
-  "keywords": ["bindings", "c++", "native"],
-
-  "homepage": "https://github.com/neutraljs/njs",
+  "keywords": [
+    "bindings",
+    "c++",
+    "native"
+  ],
+  "homepage": "https://github.com/njs-api/njs-api",
   "bugs": {
-    "url": "https://github.com/neutraljs/njs/issues"
+    "url": "https://github.com/njs-api/njs-api/issues"
   },
-
   "contributors": [
     "Petr Kobalicek <kobalicek.petr@gmail.com> (kobalicek.com)"
   ],
-
   "main": "./index.js",
-
   "dependencies": {},
   "devDependencies": {},
-
   "repository": {
     "type": "git",
-    "url": "git://github.com/neutraljs/njs.git"
-  },
-
-  "scripts": {
-    "test": "node-gyp rebuild && node test/test.js"
+    "url": "git://github.com/njs-api/njs-api.git"
   }
 }

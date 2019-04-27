@@ -1,19 +1,19 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
 
 // [Dependencies]
-#include "./test_p.h"
+#include "./njs_test_p.h"
 
 namespace test {
 
 // ============================================================================
-// [test::NJSObject]
+// [test::ObjectWrap]
 // ============================================================================
 
-NJS_BIND_CLASS(NJSObject) {
+NJS_BIND_CLASS(ObjectWrap) {
   NJS_BIND_CONSTRUCTOR() {
     // Unpack `a` and `b` arguments.
     int a, b;
@@ -22,7 +22,7 @@ NJS_BIND_CLASS(NJSObject) {
     NJS_CHECK(ctx.unpackArgument(0, a));
     NJS_CHECK(ctx.unpackArgument(1, b));
 
-    return ctx.returnNew<NJSObject>(a, b);
+    return ctx.returnNew<ObjectWrap>(a, b);
   }
 
   // --------------------------------------------------------------------------
@@ -59,10 +59,10 @@ NJS_BIND_CLASS(NJSObject) {
   }
 
   NJS_BIND_METHOD(equals) {
-    NJSObject* other;
+    ObjectWrap* other;
 
     NJS_CHECK(ctx.verifyArgumentsLength(1));
-    NJS_CHECK(ctx.unwrapArgument<NJSObject>(0, &other));
+    NJS_CHECK(ctx.unwrapArgument<ObjectWrap>(0, &other));
 
     return ctx.returnValue(self->_obj.equals(other->_obj));
   }
@@ -85,7 +85,7 @@ NJS_BIND_CLASS(NJSObject) {
 NJS_MODULE(test) {
   // TODO: This depends on V8.
   typedef v8::Local<v8::FunctionTemplate> FunctionSpec;
-  FunctionSpec ObjectSpec = NJS_INIT_CLASS(NJSObject, exports);
+  FunctionSpec ObjectSpec = NJS_INIT_CLASS(ObjectWrap, exports);
 }
 
 } // test namespace

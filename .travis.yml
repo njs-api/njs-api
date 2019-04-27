@@ -2,6 +2,7 @@ language: node_js
 
 node_js:
   - "10"
+  - "11"
   - "12"
 
 addons:
@@ -13,7 +14,7 @@ before_install:
   - npm install -g node-gyp
 
 before_script:
-  - node-gyp rebuild
+  - node-gyp rebuild -C test
 
 script:
   - node test/test.js

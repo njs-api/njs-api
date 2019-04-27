@@ -1,14 +1,12 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
 
-// [Guard]
-#ifndef _NJS_TEST_P_H
-#define _NJS_TEST_P_H
+#ifndef NJS_TEST_P_H
+#define NJS_TEST_P_H
 
-// [Dependencies]
 #include <stdio.h>
 #include "../njs-api.h"
 
@@ -82,19 +80,17 @@ public:
 };
 
 // A wrapped class.
-class NJSObject {
+class ObjectWrap {
 public:
-  NJS_BASE_CLASS(NJSObject, "Object", 0xFF)
+  NJS_BASE_CLASS(ObjectWrap, "Object", 0xFF)
 
-  NJS_INLINE NJSObject(int a, int b) noexcept
+  NJS_INLINE ObjectWrap(int a, int b) noexcept
     : _obj(a, b) {}
-  NJS_INLINE ~NJSObject() noexcept {}
+  NJS_INLINE ~ObjectWrap() noexcept {}
 
   Object _obj;
 };
 
+} // {test}
 
-} // test namespace
-
-// [Guard]
-#endif // _NJS_TEST_P_H
+#endif // NJS_TEST_P_H

@@ -1,14 +1,12 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
 
-// [Guard]
-#ifndef _NJS_INTEGRATE_LIBUV_H
-#define _NJS_INTEGRATE_LIBUV_H
+#ifndef NJS_INTEGRATE_LIBUV_H
+#define NJS_INTEGRATE_LIBUV_H
 
-// [Dependencies]
 #include "./njs-api.h"
 #include <uv.h>
 
@@ -21,7 +19,7 @@ namespace njs {
 namespace Internal {
   static NJS_NOINLINE void uvWorkCallback(uv_work_t* uvWork) noexcept;
   static NJS_NOINLINE void uvAfterWorkCallback(uv_work_t* uvWork, int status) noexcept;
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [NJS_ASYNC]
@@ -97,9 +95,7 @@ namespace Internal {
     task->onDone(ctx, data);
     task->onDestroy(ctx);
   }
-} // Internal namespace
+} // {Internal}
+} // {njs}
 
-} // njs namespace
-
-// [Guard]
-#endif // _NJS_INTEGRATE_LIBUV_H
+#endif // NJS_INTEGRATE_LIBUV_H

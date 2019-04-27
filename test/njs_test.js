@@ -1,6 +1,6 @@
 "use strict";
 
-const native = require("../build/Release/njs-test.node");
+const native = require("./build/Release/njs-test.node");
 
 // ============================================================================
 // [Boilerplate]

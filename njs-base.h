@@ -1,16 +1,17 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
 
-// [Guard]
-#ifndef _NJS_BASE_H
-#define _NJS_BASE_H
+#ifndef NJS_BASE_H
+#define NJS_BASE_H
 
-// [Dependencies]
 #include <stdarg.h>
 #include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -266,7 +267,7 @@ namespace Internal {
 template<typename T>
 inline T& pass(T& arg) { return arg; }
 
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::Internal::CastCheck]
@@ -288,7 +289,7 @@ NJS_INLINE void checkStaticCast(const Src* src) noexcept {
   (void)dst;
 }
 
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::Internal::TypeTraits]
@@ -353,7 +354,7 @@ NJS_INT_TRAITS(long long);
 NJS_INT_TRAITS(unsigned long long);
 #undef NJS_INT_TRAITS
 
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::IntUtils]
@@ -474,7 +475,7 @@ namespace StrUtils {
 // Inlining probably doesn't matter here, `vsnprintf` is complex and one more
 // function call shouldn't make any difference, so don't inline.
 static NJS_NOINLINE unsigned int vsformat(char* dst, size_t maxLength, const char* fmt, va_list ap) noexcept {
-  int result = std::vsnprintf(dst, maxLength, fmt, ap);
+  int result = vsnprintf(dst, maxLength, fmt, ap);
   unsigned int size = static_cast<unsigned int>(result);
 
   if (result < 0)
@@ -510,7 +511,7 @@ NJS_INLINE size_t slen(const CharType* str) noexcept {
 }
 // Specialize a bit...
 template<>
-NJS_INLINE size_t slen(const char* str) noexcept { return std::strlen(str); }
+NJS_INLINE size_t slen(const char* str) noexcept { return strlen(str); }
 
 } // StrUtils namespace
 
@@ -1127,9 +1128,7 @@ static NJS_NOINLINE void reportError(Context& ctx, Result result, const ResultPa
   ctx.throwNewException(exceptionType, ctx.newString(Utf8Ref(msg)));
 }
 
-} // Internal namespace
+} // {Internal}
+} // {njs}
 
-} // njs namespace
-
-// [Guard]
-#endif // _NJS_BASE_H
+#endif // NJS_BASE_H

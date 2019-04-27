@@ -1,16 +1,14 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
 
 // This file implements a NJS <-> V8 engine bridge.
 
-// [Guard]
-#ifndef _NJS_ENGINE_V8_H
-#define _NJS_ENGINE_V8_H
+#ifndef NJS_ENGINE_V8_H
+#define NJS_ENGINE_V8_H
 
-// [Dependencies]
 #include "./njs-base.h"
 #include <v8.h>
 
@@ -52,7 +50,7 @@ namespace Internal {
   // to get the V8' `v8::Local<v8::Value>` from `njs::Value` before it's defined.
   static NJS_INLINE v8::Local<v8::Value>& v8HandleOfValue(Value& value) noexcept;
   static NJS_INLINE const v8::Local<v8::Value>& v8HandleOfValue(const Value& value) noexcept;
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::ResultOf]
@@ -107,7 +105,7 @@ namespace Internal {
     else
       return uint32_t(nativeTag >>  2);
   }
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::Internal::V8 Helpers]
@@ -426,7 +424,7 @@ namespace Internal {
 
   template<typename NativeT>
   NJS_INLINE Result v8UnwrapNativeChecked(Context& ctx, NativeT** pOut, v8::Local<v8::Value> obj, uint32_t objectTag) noexcept;
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::Runtime]
@@ -1363,6 +1361,7 @@ public:
   // --------------------------------------------------------------------------
 
   NJS_INLINE Value This() const noexcept { return Value(_info.This()); }
+  NJS_INLINE Value data() const noexcept { return Value(_info.Data()); }
 
   // --------------------------------------------------------------------------
   // [Return]
@@ -1410,6 +1409,8 @@ public:
   // --------------------------------------------------------------------------
 
   NJS_INLINE Value This() const noexcept { return Value(_info.This()); }
+  NJS_INLINE Value data() const noexcept { return Value(_info.Data()); }
+
   NJS_INLINE Value propertyValue() const noexcept { return _propertyValue; }
 
   template<typename T>
@@ -1454,6 +1455,8 @@ public:
   // --------------------------------------------------------------------------
 
   NJS_INLINE Value This() const noexcept { return Value(_info.This()); }
+  NJS_INLINE Value data() const noexcept { return Value(_info.Data()); }
+
   NJS_INLINE bool isConstructCall() const noexcept { return _info.IsConstructCall(); }
 
   // --------------------------------------------------------------------------
@@ -1794,7 +1797,7 @@ namespace Internal {
           }
 
           const BindingItem& nextItem = items[i + 1];
-          if (count - i > 1 && nextItem.type == pairedType && std::strcmp(item.name, nextItem.name) == 0) {
+          if (count - i > 1 && nextItem.type == pairedType && strcmp(item.name, nextItem.name) == 0) {
             if (!getter)
               getter = (v8::AccessorGetterCallback)nextItem.data;
             else
@@ -1867,7 +1870,7 @@ namespace Internal {
       return classObj;
     }
   };
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::Wrap]
@@ -2148,7 +2151,6 @@ public:                                                                       \
   static NJS_INLINE ::njs::Result SetImpl_##NAME(                             \
     ::njs::SetPropertyContext& ctx, Type* self) noexcept
 
-} // njs namespace
+} // {njs}
 
-// [Guard]
-#endif // _NJS_ENGINE_V8_H
+#endif // NJS_ENGINE_V8_H

@@ -1,5 +1,5 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
@@ -9,11 +9,9 @@
 // project then it's much easier to just include the specific engine that you
 // are using, like "njs-engine-v8".
 
-// [Guard]
-#ifndef _NJS_H
-#define _NJS_H
+#ifndef NJS_API_H
+#define NJS_API_H
 
-// [Dependencies]
 #include "./njs-base.h"
 
 // ============================================================================
@@ -33,7 +31,7 @@
 # if defined(JS_ENGINE_MOZJS)
 #  define NJS_ENGINE_SM // jxcore - spidermonkey.
 # else
-#  define NJS_ENGINE_V8 // node/io/jxcore - v8.
+#  define NJS_ENGINE_V8 // node/jxcore - v8.
 # endif
 #endif // NJS_INTEGRATE_NODE
 
@@ -57,5 +55,4 @@
 # include "./njs-integrate-libuv.h"
 #endif // NJS_INTEGRATE_LIBUV
 
-// [Guard]
-#endif // _NJS_H
+#endif // NJS_API_H

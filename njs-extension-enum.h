@@ -1,5 +1,5 @@
-// [NJS]
-// Neutral JS interface.
+// [NJS-API]
+// Native JavaScript API for Bindings.
 //
 // [License]
 // Public Domain <http://unlicense.org>
@@ -8,11 +8,9 @@
 // sequential values into string representation and back. The `njs::Enum` type
 // provided can be used to define enumeration and to act as parser or serializer.
 
-// [Guard]
-#ifndef _NJS_EXTENSION_ENUM_H
-#define _NJS_EXTENSION_ENUM_H
+#ifndef NJS_EXTENSION_ENUM_H
+#define NJS_EXTENSION_ENUM_H
 
-// [Dependencies]
 #include "./njs-api.h"
 
 namespace njs {
@@ -125,7 +123,7 @@ L_End:
       return static_cast<size_t>((intptr_t)(pData - data));
     }
   } // EnumUtils namespace
-} // Internal namespace
+} // {Internal}
 
 // ============================================================================
 // [njs::Enum & NJS_ENUM]
@@ -218,7 +216,6 @@ struct EnumT {
     DATA \
   }
 
-} // njs namespace
+} // {njs}
 
-// [Guard]
-#endif // _NJS_EXTENSION_ENUM_H
+#endif // NJS_EXTENSION_ENUM_H
