@@ -146,7 +146,7 @@ struct Enum {
 
     unsigned int size = Internal::EnumUtils::stringify<uint16_t>(content, index, data());
     if (size == Internal::EnumUtils::kEnumNotFound || size == 0) {
-      out = ctx.newEmptyString();
+      out = ctx.newString();
       return Globals::kResultInvalidValue;
     }
     else {

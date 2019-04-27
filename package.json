@@ -26,6 +26,6 @@
   },
 
   "scripts": {
-    "test": "node-gyp rebuild && node test.js"
+    "test": "node-gyp rebuild && node test/test.js"
   }
 }

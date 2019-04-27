@@ -32,6 +32,12 @@ static const size_t kMaxStringSize = static_cast<size_t>(v8::String::kMaxLength)
 } // Globals namespace
 
 // ============================================================================
+// [njs::TypeDefs]
+// ============================================================================
+
+typedef v8::FunctionCallback NativeFunction;
+
+// ============================================================================
 // [Forward Declarations]
 // ============================================================================
 
@@ -787,6 +793,8 @@ public:
   NJS_INLINE Value newArray(uint32_t size) noexcept { return Value(v8::Array::New(v8Isolate(), int(size))); }
   NJS_INLINE Value newObject() noexcept { return Value(v8::Object::New(v8Isolate())); }
 
+  NJS_INLINE Value newString() const noexcept { return Value(v8::String::Empty(v8Isolate())); }
+
   template<typename StrRefT>
   NJS_INLINE Value newString(const StrRefT& data) noexcept {
     return Value(Internal::v8NewString<StrRefT>(*this, data, v8::NewStringType::kNormal));
@@ -797,13 +805,17 @@ public:
     return Value(Internal::v8NewString<StrRefT>(*this, data, v8::NewStringType::kInternalized));
   }
 
-  NJS_INLINE Value newEmptyString() const noexcept { return Value(v8::String::Empty(v8Isolate())); }
-
   template<typename T>
   NJS_INLINE Value newValue(const T& value) noexcept {
     Value result;
     Internal::V8ConvertImpl<T, Internal::TypeTraits<T>::kTraitId>::pack(*this, value, result._handle);
     return result;
+  }
+
+  NJS_INLINE Value newFunction(NativeFunction nativeFunction, const Value& data) noexcept {
+    return Value(
+      Internal::v8LocalFromMaybe<v8::Function>(
+        v8::Function::New(v8Context(), nativeFunction, data.v8Handle(), 0, v8::ConstructorBehavior::kThrow)));
   }
 
   // --------------------------------------------------------------------------
@@ -896,8 +908,7 @@ public:
   NJS_INLINE bool boolValue(const Value& value) noexcept {
     NJS_ASSERT(value.isValid());
     NJS_ASSERT(value.isBool());
-    v8::Maybe<bool> result = value._handle->BooleanValue(_context);
-    return result.FromMaybe(false);
+    return value._handle->BooleanValue(v8Isolate());
   }
 
   NJS_INLINE int32_t int32Value(const Value& value) const noexcept {
@@ -1045,7 +1056,7 @@ public:
   }
 
   template<typename StrRefT>
-  NJS_NOINLINE Value propertyOf(const Value& obj, const StrRefT& key) noexcept {
+  NJS_NOINLINE Value propertyOfT(Value obj, StrRefT key) noexcept {
     NJS_ASSERT(obj.isValid());
     NJS_ASSERT(obj.isObject());
 
@@ -1057,6 +1068,10 @@ public:
       Internal::v8LocalFromMaybe(
         obj.v8Value<v8::Object>()->Get(_context, keyValue._handle)));
   }
+
+  NJS_INLINE Value propertyOf(const Value& obj, const Utf8Ref& key) noexcept { return propertyOfT(obj, key); }
+  NJS_INLINE Value propertyOf(const Value& obj, const Utf16Ref& key) noexcept { return propertyOfT(obj, key); }
+  NJS_INLINE Value propertyOf(const Value& obj, const Latin1Ref& key) noexcept { return propertyOfT(obj, key); }
 
   NJS_INLINE Value propertyAt(const Value& obj, uint32_t index) noexcept {
     NJS_ASSERT(obj.isValid());
@@ -1076,6 +1091,17 @@ public:
     v8::Maybe<bool> result = obj.v8Value<v8::Object>()->Set(_context, key._handle, val._handle);
     return result.FromMaybe(false) ? Globals::kResultOk : Globals::kResultBypass;
   }
+
+  template<typename StrRefT>
+  NJS_NOINLINE Result setPropertyT(Value obj, StrRefT key, Value val) noexcept {
+    Value keyValue = newInternalizedString(key);
+    NJS_CHECK(keyValue);
+    return setProperty(obj, keyValue, val);
+  }
+
+  NJS_INLINE Result setProperty(const Value& obj, const Utf8Ref& key, const Value& val) noexcept { return setPropertyT(obj, key, val); }
+  NJS_INLINE Result setProperty(const Value& obj, const Utf16Ref& key, const Value& val) noexcept { return setPropertyT(obj, key, val); }
+  NJS_INLINE Result setProperty(const Value& obj, const Latin1Ref& key, const Value& val) noexcept { return setPropertyT(obj, key, val); }
 
   NJS_INLINE Result setPropertyAt(const Value& obj, uint32_t index, const Value& val) noexcept {
     NJS_ASSERT(obj.isValid());
@@ -1117,6 +1143,17 @@ public:
           _context,
           static_cast<int>(argc),
           const_cast<v8::Local<v8::Value>*>(reinterpret_cast<const v8::Local<v8::Value>*>(argv)))));
+  }
+
+  // --------------------------------------------------------------------------
+  // [Function]
+  // --------------------------------------------------------------------------
+
+  NJS_INLINE void setFunctionName(const Value& function, const Value& name) noexcept {
+    NJS_ASSERT(isFunction(function));
+    NJS_ASSERT(isString(name));
+
+    function.v8HandleAs<v8::Function>()->SetName(name.v8HandleAs<v8::String>());
   }
 
   // --------------------------------------------------------------------------
@@ -1594,7 +1631,8 @@ public:
     NJS_ASSERT(isValid());
 
     _object._handle.SetWeak<void>(self, _destroyCallback, v8::WeakCallbackType::kFinalizer);
-    _object._handle.MarkIndependent();
+    // TODO: Deprecated
+    // _object._handle.MarkIndependent();
   }
 
   // ------------------------------------------------------------------------
@@ -1694,7 +1732,7 @@ namespace Internal {
 
   static NJS_NOINLINE Result v8BindClassHelper(
     Context& ctx,
-    v8::Local<v8::Object> exports,
+    Value exports,
     v8::Local<v8::FunctionTemplate> classObj,
     v8::Local<v8::String> className,
     const BindingItem* items, unsigned int count) noexcept {
@@ -1706,17 +1744,19 @@ namespace Internal {
     for (unsigned int i = 0; i < count; i++) {
       const BindingItem& item = items[i];
 
-      v8::Local<v8::String> name = Internal::v8LocalFromMaybe(
-        v8::String::NewFromOneByte(
-          ctx.v8Isolate(), reinterpret_cast<const uint8_t*>(item.name), v8::NewStringType::kInternalized));
+      Value name = ctx.newInternalizedString(Latin1Ref(item.name));
+      NJS_CHECK(name);
 
       switch (item.type) {
         case BindingItem::kTypeStatic: {
-          v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
-            ctx.v8Isolate(), (v8::FunctionCallback)item.data, exports);
+          Value fn = ctx.newFunction((NativeFunction)item.data, exports);
+          NJS_CHECK(fn);
 
-          fnTemplate->SetClassName(name);
-          classObj->Set(name, fnTemplate);
+          ctx.setFunctionName(fn, name);
+          //v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
+          //  ctx.v8Isolate(), (v8::FunctionCallback)item.data, exports);
+          // fnTemplate->SetName(name);
+          classObj->Set(name.v8HandleAs<v8::String>(), fn.v8HandleAs<v8::Function>());
           break;
         }
 
@@ -1726,10 +1766,10 @@ namespace Internal {
             methodSignature = v8::Signature::New(ctx.v8Isolate(), classObj);
 
           v8::Local<v8::FunctionTemplate> fnTemplate = v8::FunctionTemplate::New(
-            ctx.v8Isolate(), (v8::FunctionCallback)item.data, exports, methodSignature);
+            ctx.v8Isolate(), (v8::FunctionCallback)item.data, exports.v8HandleAs<v8::Value>(), methodSignature);
 
-          fnTemplate->SetClassName(name);
-          prototype->Set(name, fnTemplate);
+          fnTemplate->SetClassName(name.v8HandleAs<v8::String>());
+          prototype->Set(name.v8HandleAs<v8::String>(), fnTemplate);
           break;
         }
 
@@ -1773,7 +1813,7 @@ namespace Internal {
             attr |= v8::ReadOnly;
 
           prototype->SetAccessor(
-            name, getter, setter, exports, v8::DEFAULT, static_cast<v8::PropertyAttribute>(attr), accessorSignature);
+            name.v8HandleAs<v8::String>(), getter, setter, exports.v8HandleAs<v8::Value>(), v8::DEFAULT, static_cast<v8::PropertyAttribute>(attr), accessorSignature);
           break;
         }
 
@@ -1812,13 +1852,15 @@ namespace Internal {
       typename Type::Bindings bindingItems;
       NJS_ASSERT((sizeof(bindingItems) % sizeof(BindingItem)) == 0);
 
-      v8BindClassHelper(ctx, exports.v8HandleAs<v8::Object>(),
+      v8BindClassHelper(ctx, exports,
         classObj,
         className.v8HandleAs<v8::String>(),
         reinterpret_cast<const BindingItem*>(&bindingItems),
         sizeof(bindingItems) / sizeof(BindingItem));
 
-      exports.v8HandleAs<v8::Object>()->Set(className.v8HandleAs<v8::String>(), classObj->GetFunction());
+      v8::MaybeLocal<v8::Function> fn = classObj->GetFunction(ctx.v8Context());
+      ctx.setProperty(exports, className, Value(fn.ToLocalChecked()));
+      // exports.v8HandleAs<v8::Object>()->Set(className.v8HandleAs<v8::String>(), fn.ToLocalChecked());
       return classObj;
     }
   };
@@ -2029,7 +2071,7 @@ public:                                                                       \
   }
 
 #define NJS_BIND_STATIC(NAME)                                                 \
-  static NJS_NOINLINE void StaticEntry_##NAME(                                \
+  static NJS_NOINLINE void StaticFunc_##NAME(                                 \
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) noexcept {       \
                                                                               \
     ::njs::FunctionCallContext ctx(::njs::Internal::pass(info));              \
@@ -2038,14 +2080,14 @@ public:                                                                       \
                                                                               \
   struct StaticInfo_##NAME : public ::njs::BindingItem {                      \
     NJS_INLINE StaticInfo_##NAME() noexcept                                   \
-      : BindingItem(kTypeStatic, 0, #NAME, (const void*)StaticEntry_##NAME) {}\
+      : BindingItem(kTypeStatic, 0, #NAME, (const void*)StaticFunc_##NAME) {} \
   } staticinfo_##NAME;                                                        \
                                                                               \
   static NJS_INLINE ::njs::Result StaticImpl_##NAME(                          \
     ::njs::FunctionCallContext& ctx) noexcept
 
 #define NJS_BIND_METHOD(NAME)                                                 \
-  static NJS_NOINLINE void MethodEntry_##NAME(                                \
+  static NJS_NOINLINE void MethodFunc_##NAME(                                 \
       const ::v8::FunctionCallbackInfo< ::v8::Value >& info) noexcept {       \
                                                                               \
     ::njs::FunctionCallContext ctx(::njs::Internal::pass(info));              \
@@ -2056,14 +2098,14 @@ public:                                                                       \
                                                                               \
   struct MethodInfo_##NAME : public ::njs::BindingItem {                      \
     NJS_INLINE MethodInfo_##NAME() noexcept                                   \
-      : BindingItem(kTypeMethod, 0, #NAME, (const void*)MethodEntry_##NAME) {}\
+      : BindingItem(kTypeMethod, 0, #NAME, (const void*)MethodFunc_##NAME) {} \
   } methodinfo_##NAME;                                                        \
                                                                               \
   static NJS_INLINE ::njs::Result MethodImpl_##NAME(                          \
     ::njs::FunctionCallContext& ctx, Type* self) noexcept
 
 #define NJS_BIND_GET(NAME)                                                    \
-  static NJS_NOINLINE void GetEntry_##NAME(                                   \
+  static NJS_NOINLINE void GetFunc_##NAME(                                    \
       ::v8::Local< ::v8::String > property,                                   \
       const ::v8::PropertyCallbackInfo< ::v8::Value >& info) noexcept {       \
                                                                               \
@@ -2075,21 +2117,20 @@ public:                                                                       \
                                                                               \
   struct GetInfo_##NAME : public ::njs::BindingItem {                         \
     NJS_INLINE GetInfo_##NAME() noexcept                                      \
-      : BindingItem(kTypeGetter, 0, #NAME, (const void*)GetEntry_##NAME) {}   \
+      : BindingItem(kTypeGetter, 0, #NAME, (const void*)GetFunc_##NAME) {}    \
   } GetInfo_##NAME;                                                           \
                                                                               \
   static NJS_INLINE ::njs::Result GetImpl_##NAME(                             \
     ::njs::GetPropertyContext& ctx, Type* self) noexcept
 
 #define NJS_BIND_SET(NAME)                                                    \
-  static NJS_NOINLINE void SetEntry_##NAME(                                   \
+  static NJS_NOINLINE void SetFunc_##NAME(                                    \
       ::v8::Local< ::v8::String > property,                                   \
       ::v8::Local< ::v8::Value > value,                                       \
       const v8::PropertyCallbackInfo<void>& info) noexcept {                  \
                                                                               \
-    ::njs::SetPropertyContext ctx(                                            \
-      ::njs::Internal::pass(info),                                            \
-      ::njs::Internal::pass(value));                                          \
+    ::njs::SetPropertyContext ctx(::njs::Internal::pass(info),                \
+                                  ::njs::Internal::pass(value));              \
                                                                               \
     Type* self = ::njs::Internal::v8UnwrapNativeUnsafe<Type>(                 \
       ctx, ctx._info.This());                                                 \
@@ -2098,7 +2139,7 @@ public:                                                                       \
                                                                               \
   struct SetInfo_##NAME : public ::njs::BindingItem {                         \
     NJS_INLINE SetInfo_##NAME() noexcept                                      \
-      : BindingItem(kTypeSetter, 0, #NAME, (const void*)SetEntry_##NAME) {}   \
+      : BindingItem(kTypeSetter, 0, #NAME, (const void*)SetFunc_##NAME) {}    \
   } setinfo_##NAME;                                                           \
                                                                               \
   static NJS_INLINE ::njs::Result SetImpl_##NAME(                             \
