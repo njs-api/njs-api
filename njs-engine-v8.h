@@ -1856,7 +1856,6 @@ namespace Internal {
 
       // Type::Bindings is in fact an array of `BindingItem`s.
       typename Type::Bindings bindingItems;
-      NJS_ASSERT((sizeof(bindingItems) % sizeof(BindingItem)) == 0);
 
       v8BindClassHelper(ctx, exports,
         classObj,
@@ -1866,7 +1865,6 @@ namespace Internal {
 
       v8::MaybeLocal<v8::Function> fn = classObj->GetFunction(ctx.v8Context());
       ctx.setProperty(exports, className, Value(fn.ToLocalChecked()));
-      // exports.v8HandleAs<v8::Object>()->Set(className.v8HandleAs<v8::String>(), fn.ToLocalChecked());
       return classObj;
     }
   };
@@ -2001,7 +1999,6 @@ public:                                                                       \
   enum : uint32_t { kObjectTag = TAG };                                       \
                                                                               \
   struct Bindings;                                                            \
-  friend struct Bindings;                                                     \
                                                                               \
   static NJS_INLINE const char* staticClassName() noexcept {                  \
     return CLASS_NAME;                                                        \

@@ -526,7 +526,7 @@ NJS_INLINE size_t slen(const char* str) noexcept { return strlen(str); }
 //!   - `Utf8Ref`
 //!   - `Utf16Ref`
 //!
-//! NOTE: This class is not designed to be a string container. It's rather used
+//! \note This class is not designed to be a string container. It's rather used
 //! as a wrapper of your own string that just provides string encoding. For
 //! example both `Latin1Ref` and `Utf8Ref` can be used to create a string.
 template<typename T>
@@ -686,7 +686,7 @@ struct BindingItem {
 
 //! Minimal read-only data that is used to improve and unify error handling.
 //!
-//! NOTE: Do not add useless members here, a copy will be embedded in every
+//! \note Do not add useless members here, a copy will be embedded in every
 //! executable and shared object that uses this data, so keep it lightweight.
 struct StaticData {
   // --------------------------------------------------------------------------
@@ -767,7 +767,7 @@ static const StaticData _staticData = {
 //! to users of native addons. It should help with API misuse and with finding
 //! where the error happened and why.
 //!
-//! NOTE: Only first two members of this data is initialized (or reset) by
+//! \note Only first two members of this data is initialized (or reset) by
 //! `reset()` method for performance reasons. Based on the error type and
 //! content of these values other members can be used, but not without
 //! checking `isInitialized()` first.

@@ -2,7 +2,7 @@
   "name": "njs-api",
   "version": "0.0.2",
   "license": "Unlicense",
-  "description": "Nautral JavaScript Interface",
+  "description": "Native JavaScript API for Bindings",
   "keywords": [
     "bindings",
     "c++",
