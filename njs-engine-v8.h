@@ -932,7 +932,7 @@ public:
 
   NJS_INLINE double doubleValue(const Value& value) const noexcept {
     NJS_ASSERT(value.isValid());
-    NJS_ASSERT(value.isDouble());
+    NJS_ASSERT(value.isNumber());
     v8::Maybe<double> result = value._handle->NumberValue(_context);
     return result.FromMaybe(std::numeric_limits<double>::quiet_NaN());
   }
@@ -1024,8 +1024,8 @@ public:
   // --------------------------------------------------------------------------
 
   NJS_INLINE size_t arrayLength(const Value& value) const noexcept {
-    NJS_ASSERT(isValid());
-    NJS_ASSERT(isArray());
+    NJS_ASSERT(value.isValid());
+    NJS_ASSERT(value.isArray());
     return value.v8Value<v8::Array>()->Length();
   }
 
@@ -1155,8 +1155,8 @@ public:
   // --------------------------------------------------------------------------
 
   NJS_INLINE void setFunctionName(const Value& function, const Value& name) noexcept {
-    NJS_ASSERT(isFunction(function));
-    NJS_ASSERT(isString(name));
+    NJS_ASSERT(function.isFunction());
+    NJS_ASSERT(name.isString());
 
     function.v8HandleAs<v8::Function>()->SetName(name.v8HandleAs<v8::String>());
   }
@@ -1587,7 +1587,6 @@ public:
 
   NJS_NOINLINE ~WrapData() noexcept {
     if (_object.isValid()) {
-      NJS_ASSERT(_object._handle.IsNearDeath());
       _object._handle.ClearWeak();
       _object._handle.Reset();
     }
@@ -1652,9 +1651,7 @@ public:
   template<typename T>
   static void NJS_NOINLINE destroyCallbackT(const v8::WeakCallbackInfo<void>& data) noexcept {
     T* self = (T*)(data.GetParameter());
-
     NJS_ASSERT(self->_wrapData._refCount == 0);
-    NJS_ASSERT(self->_wrapData._object._handle.IsNearDeath());
 
     self->_wrapData._object._handle.Reset();
     delete self;
